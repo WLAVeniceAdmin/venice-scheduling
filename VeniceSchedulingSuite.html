@@ -412,7 +412,7 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
       <div class="calendar-card">
         <div class="calendar-header">
           <h2 id="VT_calTitle">Monthly Schedule</h2>
-          <button class="export-btn" onclick="VT_exportCSV()">⬇ Export CSV</button>
+          <button class="export-btn" onclick="VT_exportUnified()">⬇ Export Monthly Schedule</button>
         </div>
         <div class="cal-table-wrap">
           <table class="cal-table"><thead id="VT_calHead"></thead><tbody id="VT_calBody"></tbody></table>
@@ -447,7 +447,7 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
     <div class="dotd-section">
       <div class="dotd-header">
         <h2>⭐ Doctor of the Day — Rotation Schedule</h2>
-        <button onclick="VT_exportDOTD()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:white;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;">⬇ Export CSV</button>
+        <button onclick="VT_exportUnified()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:white;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;">⬇ Export Monthly Schedule</button>
       </div>
       <div style="overflow-x:auto">
         <table class="dotd-table">
@@ -514,7 +514,7 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
   <div id="RA_dailyView">
     <div class="modules-wrap" id="RA_modulesWrap"></div>
     <div class="export-bar">
-      <button class="btn-secondary" onclick="RA_exportCSV()">⬇ Export CSV</button>
+      <button class="btn-secondary" onclick="VT_exportUnified()">⬇ Export Monthly Schedule</button>
       <button class="btn-secondary" onclick="window.print()">🖨 Print</button>
     </div>
   </div>
@@ -620,7 +620,7 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
       <div class="np-card" id="NP_calCard" style="display:none">
         <div class="np-card-header">
           <h2 id="NP_calTitle">Monthly NP/PA Calendar</h2>
-          <button onclick="NP_exportCSV()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:white;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-family:'DM Sans',sans-serif;">⬇ Export CSV</button>
+          <button onclick="VT_exportUnified()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:white;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-family:'DM Sans',sans-serif;">⬇ Export Monthly Schedule</button>
         </div>
         <div style="overflow-x:auto">
           <table class="np-cal-table"><thead id="NP_calHead"></thead><tbody id="NP_calBody"></tbody></table>
@@ -1157,47 +1157,80 @@ function VT_renderDOTD(month, year, numDays, dayData, monthName) {
   window._VT_dotdData = { assignments, month, year, monthName, dowNames };
 }
 
-function VT_exportDOTD() {
-  const d = window._VT_dotdData;
-  if (!d) return;
-  const rows = [['Date','Day','DOTD AM','DOTD PM','Absences (skipped)']];
-  const numDays = new Date(d.year, d.month, 0).getDate();
+function VT_exportUnified() {
+  let month, year;
+  if (VT_providerData.length) { month = VT_providerData[0].month; year = VT_providerData[0].year; }
+  else if (NP_providerData.length) { month = NP_providerData[0].month; year = NP_providerData[0].year; }
+  else { alert('Please load at least one provider schedule file first.'); return; }
+
+  const numDays = new Date(year, month, 0).getDate();
+  const dowNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const dotd = window._VT_dotdData;
+
+  const vtById = {};
+  VT_providerData.forEach(p => vtById[p.id] = p);
+  const npById = {};
+  NP_providerData.forEach(p => npById[p.id] = p);
+
+  const mdProviders = [
+    ...FT_MAIN.slice(0,6).map(p => ({...p, module:'Mod 361'})),
+    ...FT_MAIN.slice(6,12).map(p => ({...p, module:'Mod 362'})),
+    ...FT_MOD150.map(p => ({...p, module:'Mod 150'})),
+    {id:'dao',   name:'Dao',   fullName:'Dao, B',   rooms:[], module:'Float'},
+    {id:'lagos', name:'Lagos', fullName:'Lagos, Y',  rooms:[], module:'Float'},
+  ];
+
+  const rows = [['Date','Day','DOTD AM','DOTD PM','MD Cap Count','MD Cap Status','NP Cap Status','Role','Provider','Module','Rooms','Absence Code','AM Type','PM Type']];
+
   for (let day = 1; day <= numDays; day++) {
-    const dow = new Date(d.year, d.month-1, day).getDay();
+    const dow = new Date(year, month-1, day).getDay();
     const isWeekend = dow === 0 || dow === 6;
-    const asn = d.assignments[day];
-    rows.push([
-      `${d.month}/${day}`,
-      d.dowNames[dow],
-      isWeekend ? '' : (asn?.am.name || ''),
-      isWeekend ? '' : (asn?.pm.name || ''),
-      isWeekend ? 'Weekend' : (asn?.absentNames.join(', ') || ''),
-    ]);
+    const dateStr = `${month}/${day}/${year}`;
+    const dayName = dowNames[dow];
+
+    const dotdAM = (!isWeekend && dotd?.assignments[day]?.am?.name) || '';
+    const dotdPM = (!isWeekend && dotd?.assignments[day]?.pm?.name) || '';
+
+    const mdCapCount = isWeekend ? '' : mdProviders.filter(p => {
+      const pd = vtById[p.id]; if(!pd) return false;
+      const c = pd.dayCodes[day];
+      return c && [...c].some(x => CAP_CODES.has(x));
+    }).length;
+    const mdCapStatus = isWeekend ? '' : (mdCapCount >= 5 ? 'FLAGGED' : mdCapCount === 4 ? 'AT LIMIT' : 'OK');
+
+    const npAbsCount = isWeekend ? 0 : NP_getAbsentsForDay(day, month, year).size;
+    const npCapStatus = isWeekend ? '' : (npAbsCount > 0 ? 'CAP HIT' : 'OK');
+
+    for (const p of mdProviders) {
+      const pd = vtById[p.id];
+      const codes = pd && pd.dayCodes[day] && pd.dayCodes[day].size ? [...pd.dayCodes[day]].join('+') : '';
+      const ws = !isWeekend ? WEEKLY_SHIFTS[p.id]?.[dow] : null;
+      const fs = !isWeekend && FLOAT_SCHEDULE[p.id] ? FLOAT_SCHEDULE[p.id].schedule[dow] : null;
+      let amType = '', pmType = '';
+      if (!codes) {
+        if (ws) { amType = ws.am || ''; pmType = ws.pm || ''; }
+        else if (fs) {
+          amType = fs.AM?.code || (fs.AM?.rooms?.length ? 'F2F' : '');
+          pmType = fs.PM?.code || (fs.PM?.rooms?.length ? 'F2F' : '');
+        }
+      }
+      const rooms = Array.isArray(p.rooms) && p.rooms.length ? p.rooms.join(' & ') : '';
+      rows.push([dateStr, dayName, dotdAM, dotdPM, isWeekend ? '' : mdCapCount, mdCapStatus, npCapStatus,
+        'MD', p.fullName || p.name, p.module, rooms, codes, amType, pmType]);
+    }
+
+    for (const p of ALL_NPS) {
+      const pd = npById[p.id];
+      const codes = pd && pd.dayCodes[day] && pd.dayCodes[day].size ? [...pd.dayCodes[day]].join('+') : '';
+      rows.push([dateStr, dayName, dotdAM, dotdPM, isWeekend ? '' : mdCapCount, mdCapStatus, npCapStatus,
+        p.capTracked ? 'NP/PA (Staff)' : 'NP/PA', p.name, 'Mod 360', '', codes, '', '']);
+    }
   }
-  const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
-  a.download = `VeniceDOTD_${d.year}_${String(d.month).padStart(2,'0')}.csv`;
-  a.click();
-}
-
-function VT_exportCSV() {
-  if(!VT_providerData.length)return;
-  const month=VT_providerData[0].month,year=VT_providerData[0].year;
-  const numDays=new Date(year,month,0).getDate();
-  const dowNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const rows=[['Date','Day',...VT_providerData.map(p=>p.name),'Total Out (capped)','Status']];
-  for(let d=1;d<=numDays;d++){
-    const dow=new Date(year,month-1,d).getDay();
-    const codes=VT_providerData.map(p=>{const c=p.dayCodes[d];return c&&c.size>0?[...c].join('+'):''});
-    const cnt=VT_providerData.filter(p=>{const c=p.dayCodes[d];return c&&[...c].some(x=>CAP_CODES.has(x));}).length;
-    const status=cnt>=5?'FLAGGED':cnt===4?'AT LIMIT':cnt>0?'OK':'';
-    rows.push([`${month}/${d}`,dowNames[dow],...codes,cnt||'',status]);
-  }
-  const csv=rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
-  a.download=`VeniceSchedule_${year}_${String(month).padStart(2,'0')}.csv`;
+  a.download = `VeniceSchedule_${year}_${String(month).padStart(2,'0')}.csv`;
   a.click();
 }
 
@@ -1564,23 +1597,6 @@ function RA_resetScenario() {
   RA_renderModules('RA_scenarioWrap',new Set([...RA_allAbsent(),...RA_scenarioAbsent]));
 }
 
-function RA_exportCSV() {
-  const dow=RA_getDow();
-  const rows=[['Module','Room','Provider','Shift','Status']];
-  FT_MAIN.forEach(p=>p.rooms.forEach(r=>{
-    const shift=RA_getShift(p.id,dow);
-    rows.push(['Venice Main',`Rm ${r}`,p.name,shift,RA_absent.has(p.id)?'ABSENT':'Present']);
-  }));
-  FT_MOD150.forEach(p=>p.rooms.forEach(r=>{
-    const shift=RA_getShift(p.id,dow);
-    rows.push(['MOD 150',`Rm ${r}`,p.name,shift,RA_absent.has(p.id)?'ABSENT':'Present']);
-  }));
-  const csv=rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
-  a.download=`VeniceRooms_${document.getElementById('RA_dateInput').value}_${RA_session}.csv`;
-  a.click();
-}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // NP/PA TRACKER (NP_)
@@ -1765,25 +1781,6 @@ function NP_render() {
 
 function NP_removeManual(i){NP_manualEntries.splice(i,1);NP_render();}
 
-function NP_exportCSV() {
-  if(!NP_providerData.length&&!NP_manualEntries.length)return;
-  const month=NP_providerData.length?NP_providerData[0].month:new Date().getMonth()+1;
-  const year=NP_providerData.length?NP_providerData[0].year:new Date().getFullYear();
-  const numDays=new Date(year,month,0).getDate();
-  const staffNPs=ALL_NPS.filter(p=>p.capTracked);
-  const dowNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const rows=[['Date','Day',...staffNPs.map(p=>p.name),'Cap Status']];
-  for(let d=1;d<=numDays;d++){
-    const dow=new Date(year,month-1,d).getDay();
-    const abs=NP_getAbsentsForDay(d,month,year);
-    rows.push([`${month}/${d}`,dowNames[dow],...staffNPs.map(p=>abs.has(p.id)?'OUT':''),abs.size>0?'CAP HIT':'OK']);
-  }
-  const csv=rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
-  a.download=`VeniceNPPA_${year}_${String(month).padStart(2,'0')}.csv`;
-  a.click();
-}
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 NP_render();

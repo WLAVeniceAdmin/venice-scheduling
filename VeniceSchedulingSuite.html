@@ -645,6 +645,7 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script>
 // ══════════════════════════════════════════════════════════════════════════════
 // SHARED DATA
@@ -1598,17 +1599,18 @@ function RA_resetScenario() {
 }
 
 
-function RA_exportDailySchedule() {
+async function RA_exportDailySchedule() {
   const dateStr = document.getElementById('RA_dateInput').value;
   if (!dateStr) { alert('Please select a date first (Room Assignment tab).'); return; }
+  if (typeof ExcelJS === 'undefined') { alert('Excel library still loading — please try again in a moment.'); return; }
 
   const [year, month, day] = dateStr.split('-').map(Number);
   const dateObj = new Date(dateStr + 'T12:00:00');
-  const dow = dateObj.getDay(); // 0=Sun,1=Mon,...,5=Fri,6=Sat
+  const dow = dateObj.getDay();
   const isWeekend = dow === 0 || dow === 6;
 
-  const dowNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const DOW_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const MON_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const ordinal = n => n + (['th','st','nd','rd'][n%10<4&&(n<11||n>13)?n%10:0]||'th');
 
   // DOTD
@@ -1619,109 +1621,275 @@ function RA_exportDailySchedule() {
     dotdPM = dotd.assignments[day].pm?.name || '';
   }
 
-  // Absence code for MD
   function getMDCode(id) {
     const pd = VT_providerData.find(p=>p.id===id);
     if (!pd || pd.month!==month || pd.year!==year) return '';
     const c = pd.dayCodes[day];
     return c && c.size ? [...c].join('+') : '';
   }
-  // Absence code for NP
   function getNPCode(id) {
     const pd = NP_providerData.find(p=>p.id===id);
     if (!pd || pd.month!==month || pd.year!==year) return '';
     const c = pd.dayCodes[day];
     return c && c.size ? [...c].join('+') : '';
   }
-  // AM/PM type for a working MD
-  function getType(id, session) {
+  function getShiftType(id, session) {
     if (isWeekend) return '';
-    const ws = WEEKLY_SHIFTS[id]?.[dow];
-    if (ws) return session==='AM' ? ws.am||'' : ws.pm||'';
+    const shifts = WEEKLY_SHIFTS[id]?.[dow];
+    if (shifts) return session==='AM' ? shifts.am||'' : shifts.pm||'';
     const fs = FLOAT_SCHEDULE[id]?.schedule[dow];
-    if (fs) {
-      const slot = fs[session];
-      return slot?.code || (slot?.rooms?.length ? 'F2F' : '');
-    }
+    if (fs) { const slot=fs[session]; return slot?.code||(slot?.rooms?.length?'F2F':''); }
     return '';
   }
-  // Float rooms for a given day
   function floatRooms(id) {
     if (isWeekend) return '';
     const fs = FLOAT_SCHEDULE[id]?.schedule[dow];
     if (!fs) return '';
-    const all = [...new Set([...(fs.AM?.rooms||[]),...(fs.PM?.rooms||[])])].filter(Boolean);
+    const all=[...new Set([...(fs.AM?.rooms||[]),...(fs.PM?.rooms||[])])].filter(Boolean);
     return all.length ? all.join(' & ') : '';
   }
-  // Build one physician row: [Room, Name, blank, AM, PM, blank x7]
-  function mdRow(rooms, id, fullName) {
+  function cellVal(id) {
     const code = getMDCode(id);
-    const am = code || getType(id,'AM');
-    const pm = code || getType(id,'PM');
-    return [rooms, fullName, '', am, pm, '', '', '', '', '', '', ''];
+    return { am: code||getShiftType(id,'AM'), pm: code||getShiftType(id,'PM'), absent: !!code };
   }
 
-  const rows = [];
+  // ── ExcelJS workbook ──
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Venice Scheduling Suite';
+  wb.created = new Date();
+  const sh = wb.addWorksheet('Daily Schedule', {
+    pageSetup:{ paperSize:9, orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0 }
+  });
 
-  // ── HEADER ──
-  rows.push(['*** Schedule is subject to change according to the clinic\'s need and staff availability. ***','','','','','','Specimen Drop Off','MOD 150','','MOD 361','','MOD 362']);
-  rows.push(['','','','','','','AM','','','','','']);
-  rows.push([dowNames[dow],'',`${monthNames[month-1]} ${ordinal(day)}`,'','','In-Basket Coverage','PM','','','','','']);
-  const dotdLabel = (dotdAM||dotdPM) ? `AM: Dr. ${dotdAM}                    PM: Dr. ${dotdPM}` : '';
-  rows.push(['Incident Provider',dotdLabel,'','','SCREENING ROOMS: MOD 361 AND MOD 362 - RM 20','','COVERING NURSE/FLOAT','','','','','']);
-  rows.push(['','','','','','','','','','','','']);
+  sh.columns = [
+    {width:13},{width:30},{width:6},{width:20},{width:20},{width:26},
+    {width:32},{width:16},{width:22},{width:22},{width:22},{width:22}
+  ];
+
+  // Color tokens (ARGB)
+  const C = {
+    navy:'FF0F2540', blue:'FF1D6FA4', teal:'FF0E8A7A', purple:'FF6B3FA0',
+    white:'FFFFFFFF', offwhite:'FFF8FAFB', rowAlt:'FFEBF5FB',
+    yellow:'FFFFF9C4', yellowText:'FF7A4B00',
+    redBg:'FFFDEAEA', redText:'FFB92D2D',
+    tealBg:'FFE3F5F3', tealText:'FF0E8A7A',
+    amberBg:'FFFEF6E4', amberText:'FFC47A1A',
+    greyBg:'FFF4F6F8', greyText:'FF666666',
+  };
+
+  let rn = 0; // current row number
+
+  function setFill(cell, argb) {
+    cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb} };
+  }
+  function setFont(cell, opts) {
+    cell.font = { name:'Calibri', size:10, ...opts };
+  }
+  function setBorder(cell, s='thin') {
+    cell.border = { top:{style:s}, left:{style:s}, bottom:{style:s}, right:{style:s} };
+  }
+  function styleHeader(row, bgArgb, fgArgb=C.white, sz=10) {
+    for (let c=1;c<=12;c++) {
+      const cell = row.getCell(c);
+      setFill(cell, bgArgb);
+      setFont(cell, { bold:true, color:{argb:fgArgb}, size:sz });
+      setBorder(cell);
+      cell.alignment = { vertical:'middle', horizontal:'center', wrapText:true };
+    }
+  }
+  function stylePhysRow(row, alt=false) {
+    for (let c=1;c<=12;c++) {
+      const cell = row.getCell(c);
+      setFill(cell, alt ? C.rowAlt : C.white);
+      setFont(cell, {});
+      setBorder(cell);
+      cell.alignment = { vertical:'middle', wrapText:true };
+    }
+  }
+  function colorCode(cell, code) {
+    if (!code) return;
+    const up = code.toUpperCase();
+    if (CAP_CODES.has(up) || up.includes('VAC')||up.includes('EL')||up.includes('LOA')) {
+      setFill(cell, C.redBg); setFont(cell, { bold:true, color:{argb:C.redText} });
+    } else if (up==='VV') {
+      setFill(cell, C.tealBg); setFont(cell, { bold:true, color:{argb:C.tealText} });
+    } else if (up==='SL') {
+      setFill(cell, C.amberBg); setFont(cell, { bold:true, color:{argb:C.amberText} });
+    } else if (up==='OFF'||up==='IW'||up==='AT') {
+      setFill(cell, C.greyBg); setFont(cell, { color:{argb:C.greyText} });
+    }
+  }
+
+  function addSectionHeader(modLabel, extLabel, col11Label='AM') {
+    rn++;
+    const r = sh.getRow(rn); r.height = 22;
+    r.getCell(1).value = 'Exam Room';
+    r.getCell(2).value = `${modLabel}       ${extLabel}`;
+    r.getCell(4).value = 'AM';
+    r.getCell(5).value = 'PM';
+    r.getCell(6).value = 'In-Basket Coverage';
+    r.getCell(7).value = 'Nursing Staff Schedule';
+    r.getCell(8).value = 'Lunch';
+    r.getCell(9).value = 'AM';
+    r.getCell(10).value = 'PM';
+    r.getCell(11).value = col11Label;
+    r.getCell(12).value = 'PM';
+    styleHeader(r, C.blue);
+  }
+
+  function addMDRow(rooms, id, fullName, idx) {
+    const {am, pm} = cellVal(id);
+    rn++;
+    const r = sh.getRow(rn); r.height = 20;
+    stylePhysRow(r, idx%2===1);
+    r.getCell(1).value = rooms;
+    r.getCell(2).value = fullName;
+    r.getCell(4).value = am;
+    r.getCell(5).value = pm;
+    r.getCell(1).alignment = { vertical:'middle', horizontal:'center' };
+    r.getCell(2).alignment = { vertical:'middle', horizontal:'left' };
+    r.getCell(4).alignment = { vertical:'middle', horizontal:'center' };
+    r.getCell(5).alignment = { vertical:'middle', horizontal:'center' };
+    colorCode(r.getCell(4), am);
+    colorCode(r.getCell(5), pm);
+  }
+
+  function addBlankRow() {
+    rn++;
+    const r = sh.getRow(rn); r.height = 6;
+    for (let c=1;c<=12;c++) { setFill(r.getCell(c), C.white); setBorder(r.getCell(c),'hair'); }
+  }
+
+  // ── ROW 1: Title ──
+  rn++;
+  const r1 = sh.getRow(rn); r1.height = 26;
+  r1.getCell(1).value = '*** Schedule is subject to change according to the clinic\'s need and staff availability. ***';
+  r1.getCell(7).value = 'Specimen Drop Off';
+  r1.getCell(8).value = 'MOD 150';
+  r1.getCell(10).value = 'MOD 361';
+  r1.getCell(11).value = 'MOD 362';
+  styleHeader(r1, C.yellow, C.yellowText, 9);
+  r1.getCell(1).font = { name:'Calibri', italic:true, size:9, bold:true, color:{argb:C.yellowText} };
+  r1.getCell(1).alignment = { vertical:'middle', horizontal:'left', wrapText:true };
+  sh.mergeCells(`A1:F1`);
+
+  // ── ROW 2: AM labels for specimen columns ──
+  rn++;
+  const r2 = sh.getRow(rn); r2.height = 15;
+  r2.getCell(7).value = 'AM';
+  styleHeader(r2, C.yellow, C.yellowText, 9);
+
+  // ── ROW 3: Day / Date ──
+  rn++;
+  const r3 = sh.getRow(rn); r3.height = 22;
+  r3.getCell(1).value = DOW_NAMES[dow];
+  r3.getCell(3).value = `${MON_NAMES[month-1]} ${ordinal(day)}`;
+  r3.getCell(6).value = 'In-Basket Coverage';
+  r3.getCell(7).value = 'PM';
+  styleHeader(r3, C.yellow, C.yellowText, 9);
+  r3.getCell(1).font = { name:'Calibri', bold:true, size:14, color:{argb:C.navy} };
+  r3.getCell(3).font = { name:'Calibri', bold:true, size:14, color:{argb:C.navy} };
+  r3.getCell(1).alignment = { vertical:'middle', horizontal:'center' };
+  r3.getCell(3).alignment = { vertical:'middle', horizontal:'center' };
+
+  // ── ROW 4: Incident Provider / DOTD ──
+  rn++;
+  const r4 = sh.getRow(rn); r4.height = 30;
+  r4.getCell(1).value = 'Incident Provider';
+  r4.getCell(3).value = (dotdAM||dotdPM)
+    ? `AM: Dr. ${dotdAM}                                     PM: Dr. ${dotdPM}`
+    : '(load physician files to auto-assign)';
+  r4.getCell(7).value = 'SCREENING ROOMS: MOD 361 AND MOD 362 — RM 20';
+  r4.getCell(9).value = 'COVERING NURSE / FLOAT';
+  r4.getCell(11).value = 'Other Assignment';
+  styleHeader(r4, C.navy, C.white, 11);
+  sh.mergeCells(`C4:F4`); sh.mergeCells(`G4:H4`); sh.mergeCells(`I4:J4`);
+  [1,3,7,9,11].forEach(c => {
+    r4.getCell(c).alignment = { vertical:'middle', horizontal:'center', wrapText:true };
+  });
+
+  // ── Spacer ──
+  addBlankRow();
 
   // ── MODULE 361 ──
-  rows.push(['Exam Room','Module 361       Ext 3896','','AM','PM','In-Basket Coverage','Nursing Staff Schedule','Lunch','AM','PM','AM','PM']);
-  const mod361 = [
-    {id:'dao',      rooms:()=>floatRooms('dao')||'(float)',   fullName:'Dao, B'},
-    {id:'fang',     rooms:()=>'9 & 10',  fullName:'Fang, K'},
-    {id:'lagos',    rooms:()=>floatRooms('lagos')||'(float)', fullName:'Lagos, Y'},
-    {id:'morales',  rooms:()=>'2 & 3',   fullName:'Morales, G'},
-    {id:'nudell',   rooms:()=>'5 & 6',   fullName:'Nudell, J'},
-    {id:'saeedian', rooms:()=>'11 & 12', fullName:'Saeedian, J'},
-    {id:'siegel',   rooms:()=>'1 & 4',   fullName:'Siegel, J'},
-    {id:'zakka',    rooms:()=>'7 & 8',   fullName:'Zakka, K'},
-  ];
-  mod361.forEach(p => rows.push(mdRow(p.rooms(), p.id, p.fullName)));
-  rows.push(['','','','','','','','','','','','']);
+  addSectionHeader('Module 361', 'Ext 3896');
+  [
+    {id:'dao',      rooms:floatRooms('dao')||'(float)', fullName:'Dao, B'},
+    {id:'fang',     rooms:'9 & 10',                     fullName:'Fang, K'},
+    {id:'lagos',    rooms:floatRooms('lagos')||'(float)',fullName:'Lagos, Y'},
+    {id:'morales',  rooms:'2 & 3',                      fullName:'Morales, G'},
+    {id:'nudell',   rooms:'5 & 6',                      fullName:'Nudell, J'},
+    {id:'saeedian', rooms:'11 & 12',                    fullName:'Saeedian, J'},
+    {id:'siegel',   rooms:'1 & 4',                      fullName:'Siegel, J'},
+    {id:'zakka',    rooms:'7 & 8',                      fullName:'Zakka, K'},
+  ].forEach((p,i) => addMDRow(p.rooms, p.id, p.fullName, i));
+
+  addBlankRow();
 
   // ── MODULE 362 ──
-  rows.push(['Exam Room','Module 362       Ext 2441 & 3898','','AM','PM','In-Basket Coverage','Nursing Staff Schedule','Lunch','AM','PM','AM','PM']);
-  const mod362 = [
+  addSectionHeader('Module 362', 'Ext 2441 & 3898');
+  [
     {id:'chen',      rooms:'23 & 24', fullName:'Chen, A'},
     {id:'kimm',      rooms:'25 & 26', fullName:'Kimm, S'},
     {id:'moghtader', rooms:'21 & 22', fullName:'Moghtader, S'},
     {id:'nguyen',    rooms:'13 & 14', fullName:'Nguyen, L'},
     {id:'ozaki',     rooms:'15 & 16', fullName:'Ozaki, R'},
     {id:'pham',      rooms:'17 & 18', fullName:'Pham, A'},
-  ];
-  mod362.forEach(p => rows.push(mdRow(p.rooms, p.id, p.fullName)));
-  rows.push(['','','','','','','','','','','','']);
+  ].forEach((p,i) => addMDRow(p.rooms, p.id, p.fullName, i));
 
-  // ── MODULE 150 - APC ──
-  rows.push(['Exam Room','Module 150 --- APC   EXT: 6744','','AM','PM','In-Basket Coverage','Nursing Staff Schedule','Lunch','AM','PM','Other Assignment','']);
-  const mod150 = [
+  addBlankRow();
+
+  // ── MODULE 150 ──
+  addSectionHeader('Module 150 — APC', 'Ext 6744', 'Other Assignment');
+  [
     {id:'bazargan', rooms:'M & N', fullName:'Bazargan-Lari'},
     {id:'green',    rooms:'O & P', fullName:'Green, D'},
     {id:'hartmans', rooms:'R & S', fullName:'Hartmans, S'},
-  ];
-  mod150.forEach(p => rows.push(mdRow(p.rooms, p.id, p.fullName)));
-  rows.push(['','','','','','','','','','','','']);
+  ].forEach((p,i) => addMDRow(p.rooms, p.id, p.fullName, i));
+
+  addBlankRow();
 
   // ── NP/PA SECTION ──
-  rows.push(['','Module 360','','AM','PM','In-Basket Coverage','','','','','Other Assignment','']);
-  ALL_NPS.forEach(p => {
-    const code = getNPCode(p.id);
-    rows.push(['', p.name, '', code||'', '', '', '', '', '', '', '', '']);
-  });
-  rows.push(['','','','','','','','','','','','']);
-  rows.push([`Generated by Venice Scheduling Suite · ${new Date().toLocaleDateString()}`, '', '', '', '', '', '', '', '', '', '', '']);
+  rn++;
+  const npHdr = sh.getRow(rn); npHdr.height = 22;
+  npHdr.getCell(1).value = 'Suite';
+  npHdr.getCell(2).value = 'Module 360';
+  npHdr.getCell(4).value = 'AM';
+  npHdr.getCell(5).value = 'PM';
+  npHdr.getCell(6).value = 'In-Basket Coverage';
+  npHdr.getCell(7).value = 'Nursing Staff Schedule';
+  npHdr.getCell(8).value = 'Lunch';
+  npHdr.getCell(9).value = 'AM';
+  npHdr.getCell(10).value = 'PM';
+  npHdr.getCell(11).value = 'Other Assignment';
+  styleHeader(npHdr, C.teal);
 
-  const csv = rows.map(r => r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  ALL_NPS.forEach((p, i) => {
+    const code = getNPCode(p.id);
+    rn++;
+    const r = sh.getRow(rn); r.height = 20;
+    stylePhysRow(r, i%2===1);
+    r.getCell(2).value = p.name;
+    r.getCell(4).value = code;
+    r.getCell(2).alignment = { vertical:'middle', horizontal:'left' };
+    r.getCell(4).alignment = { vertical:'middle', horizontal:'center' };
+    if (code) colorCode(r.getCell(4), code);
+  });
+
+  // ── Footer ──
+  addBlankRow();
+  rn++;
+  const rFoot = sh.getRow(rn); rFoot.height = 14;
+  rFoot.getCell(1).value = `Generated by Venice Clinic Scheduling Suite · ${new Date().toLocaleDateString()} · Physician schedule only — nursing/in-basket to be completed manually`;
+  setFont(rFoot.getCell(1), { size:8, italic:true, color:{argb:'FF999999'} });
+  sh.mergeCells(`A${rn}:L${rn}`);
+
+  // ── Download ──
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
-  a.download = `VeniceSchedule_${dateStr}.csv`;
+  a.href = URL.createObjectURL(blob);
+  a.download = `VeniceSchedule_${dateStr}.xlsx`;
   a.click();
 }
 

@@ -659,9 +659,16 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
 <script>
 // ══════════════════════════════════════════════════════════════════════════════
 // FIREBASE SYNC
-// Paste your Firebase config object below (from Firebase Console → Project Settings → Your apps)
 // ══════════════════════════════════════════════════════════════════════════════
-const FIREBASE_CONFIG = null; // ← REPLACE with your config object, e.g.:
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCPPacxYcauZ-zH96QKFSOW7Ex7giKq0RE",
+  authDomain: "venice-scheduling.firebaseapp.com",
+  projectId: "venice-scheduling",
+  storageBucket: "venice-scheduling.firebasestorage.app",
+  messagingSenderId: "926486683805",
+  appId: "1:926486683805:web:5b718832e0292f6fa57474"
+};
+// const FIREBASE_CONFIG = null; // ← set to null to disable cloud sync
 // const FIREBASE_CONFIG = {
 //   apiKey: "AIza...",
 //   authDomain: "your-project.firebaseapp.com",

@@ -363,6 +363,14 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
   <div id="headerBadge" style="font-size:11px;color:rgba(255,255,255,.5);font-family:'DM Mono',monospace;"></div>
 </header>
 
+<!-- ═══ CLOUD SYNC BAR ═══ -->
+<div id="syncBar" style="background:#1a3a5c;padding:6px 32px;display:flex;align-items:center;gap:12px;font-size:11px;font-family:'DM Mono',monospace;">
+  <span id="syncDot" style="width:8px;height:8px;border-radius:50%;background:#666;flex-shrink:0;"></span>
+  <span id="syncMsg" style="color:rgba(255,255,255,.5);">Cloud sync not configured</span>
+  <span style="flex:1"></span>
+  <button id="syncBtn" onclick="FB_saveNow()" style="display:none;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.7);padding:3px 12px;border-radius:4px;cursor:pointer;font-size:11px;font-family:'DM Mono',monospace;">↑ Save now</button>
+</div>
+
 <!-- ═══ TAB BAR ═══ -->
 <nav class="tab-bar">
   <button class="tab-bar-btn active" onclick="switchTab('vt')">📅 Vacation Tracker</button>
@@ -646,7 +654,145 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script>
+// ══════════════════════════════════════════════════════════════════════════════
+// FIREBASE SYNC
+// Paste your Firebase config object below (from Firebase Console → Project Settings → Your apps)
+// ══════════════════════════════════════════════════════════════════════════════
+const FIREBASE_CONFIG = null; // ← REPLACE with your config object, e.g.:
+// const FIREBASE_CONFIG = {
+//   apiKey: "AIza...",
+//   authDomain: "your-project.firebaseapp.com",
+//   projectId: "your-project-id",
+//   storageBucket: "your-project.appspot.com",
+//   messagingSenderId: "123456789",
+//   appId: "1:123456789:web:abc123"
+// };
+
+let FB_db = null;
+const FB_DOC = 'venice_schedules/shared';
+
+function FB_init() {
+  if (!FIREBASE_CONFIG) return;
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    FB_db = firebase.firestore();
+    FB_setStatus('connecting', 'Connecting to cloud…');
+    // Subscribe to live updates — any save by another admin auto-reloads
+    FB_db.doc(FB_DOC).onSnapshot(snap => {
+      if (!snap.exists) { FB_setStatus('ready', 'Cloud ready — no data saved yet'); return; }
+      const d = snap.data();
+      const ago = d.lastUpdated ? FB_timeAgo(d.lastUpdated.toDate()) : '';
+      const who = d.updatedBy ? ` by ${d.updatedBy}` : '';
+      FB_setStatus('synced', `Last saved ${ago}${who}`);
+      // Only auto-apply if we have no local data loaded yet
+      if (!VT_providerData.length && !NP_providerData.length) {
+        FB_applySnapshot(d);
+      }
+    }, err => FB_setStatus('error', 'Sync error — check console'));
+  } catch(e) { FB_setStatus('error', 'Firebase init failed'); console.error(e); }
+}
+
+function FB_setStatus(state, msg) {
+  const dot = document.getElementById('syncDot');
+  const txt = document.getElementById('syncMsg');
+  const btn = document.getElementById('syncBtn');
+  if (!dot) return;
+  dot.style.background = {synced:'#2ecc71',syncing:'#f39c12',connecting:'#f39c12',ready:'#3498db',error:'#e74c3c'}[state]||'#666';
+  txt.style.color = state==='error' ? '#e74c3c' : 'rgba(255,255,255,.6)';
+  txt.textContent = msg;
+  btn.style.display = (state==='ready'||state==='synced') ? 'block' : 'none';
+}
+
+function FB_timeAgo(date) {
+  const s = Math.floor((Date.now() - date) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.floor(s/60)}m ago`;
+  if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+  return date.toLocaleDateString();
+}
+
+// Serialize VT/NP provider data (Maps/Sets → plain objects)
+function FB_serializeProviders(arr) {
+  return arr.map(p => ({
+    id: p.id, name: p.name, month: p.month, year: p.year,
+    dayCodes: Object.fromEntries(
+      Object.entries(p.dayCodes).map(([d, s]) => [d, [...s]])
+    )
+  }));
+}
+function FB_deserializeProviders(arr) {
+  return (arr||[]).map(p => ({
+    ...p,
+    dayCodes: Object.fromEntries(
+      Object.entries(p.dayCodes||{}).map(([d, a]) => [d, new Set(a)])
+    )
+  }));
+}
+
+function FB_serializeDotd(d) {
+  if (!d) return null;
+  const assignments = {};
+  Object.entries(d.assignments||{}).forEach(([day, asn]) => {
+    assignments[day] = {
+      am: asn.am ? {id:asn.am.id, name:asn.am.name} : null,
+      pm: asn.pm ? {id:asn.pm.id, name:asn.pm.name} : null,
+      absentNames: asn.absentNames||[]
+    };
+  });
+  return { month:d.month, year:d.year, monthName:d.monthName, assignments };
+}
+
+async function FB_saveNow() {
+  if (!FB_db) return;
+  FB_setStatus('syncing', 'Saving…');
+  const name = localStorage.getItem('venice_admin_name') ||
+    (()=>{ const n=prompt('Your name/initials (shown to other admins):',''); if(n) localStorage.setItem('venice_admin_name',n); return n||'Admin'; })();
+  try {
+    await FB_db.doc(FB_DOC).set({
+      vtProviders:  FB_serializeProviders(VT_providerData),
+      npProviders:  FB_serializeProviders(NP_providerData),
+      dotdData:     FB_serializeDotd(window._VT_dotdData),
+      npManual:     NP_manualEntries||[],
+      lastUpdated:  firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy:    name,
+    });
+    FB_setStatus('synced', `Saved just now by ${name}`);
+  } catch(e) { FB_setStatus('error', 'Save failed — check console'); console.error(e); }
+}
+
+function FB_applySnapshot(d) {
+  if (d.vtProviders?.length) {
+    VT_providerData = FB_deserializeProviders(d.vtProviders);
+    VT_renderResults();
+  }
+  if (d.npProviders?.length) {
+    NP_providerData = FB_deserializeProviders(d.npProviders);
+    NP_render();
+  }
+  if (d.dotdData) {
+    window._VT_dotdData = d.dotdData;
+    const dotdEl = document.getElementById('VT_dotdSection');
+    if (dotdEl && VT_providerData.length) {
+      const {month,year,monthName} = d.dotdData;
+      const numDays = new Date(year,month,0).getDate();
+      const dayData = {};
+      VT_providerData.forEach(p => {
+        for(let day=1;day<=numDays;day++) {
+          if(!dayData[day]) dayData[day]={};
+          dayData[day][p.id] = p.dayCodes[day]||new Set();
+        }
+      });
+      VT_renderDOTD(month,year,numDays,dayData,monthName);
+      dotdEl.style.display='block';
+    }
+  }
+  if (d.npManual) NP_manualEntries = d.npManual;
+  RA_syncFromVT();
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // SHARED DATA
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1020,6 +1166,8 @@ function VT_renderResults() {
 
   // Compute and render DOTD
   VT_renderDOTD(month, year, numDays, dayData, monthName);
+  // Auto-save to cloud after compile
+  if (FB_db) setTimeout(FB_saveNow, 500);
 }
 
 // ── DOCTOR OF THE DAY ────────────────────────────────────────────────────────
@@ -2080,6 +2228,7 @@ function NP_removeManual(i){NP_manualEntries.splice(i,1);NP_render();}
 // ── INIT ──────────────────────────────────────────────────────────────────────
 NP_render();
 RA_init();
+FB_init();
 </script>
 </body>
 </html>

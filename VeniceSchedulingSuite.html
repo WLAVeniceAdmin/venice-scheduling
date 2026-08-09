@@ -244,6 +244,27 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
 .status-msg{font-size:11px;color:var(--grey3);font-family:'DM Mono',monospace;margin-left:auto;}
 .export-bar{display:flex;gap:10px;margin-top:16px;}
 
+/* DOTD */
+.dotd-pill{display:inline-block;padding:2px 8px;border-radius:10px;font-family:'DM Mono',monospace;
+  font-size:10px;font-weight:600;background:var(--amber-lt);color:var(--amber);white-space:nowrap;}
+.dotd-section{background:white;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin-top:24px;}
+.dotd-header{background:var(--amber);color:white;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;}
+.dotd-header h2{font-family:'Instrument Serif',serif;font-size:18px;}
+.dotd-table{width:100%;border-collapse:collapse;font-size:12px;}
+.dotd-table th{background:var(--grey);padding:8px 14px;text-align:left;font-family:'DM Mono',monospace;
+  font-size:10px;font-weight:700;color:var(--text2);letter-spacing:.06em;border-bottom:2px solid var(--grey2);}
+.dotd-table td{padding:7px 14px;border-bottom:1px solid var(--grey2);vertical-align:middle;}
+.dotd-table tr.weekend-row td{background:#fafbfc;color:var(--grey3);}
+.dotd-table tr.hw-row td{background:var(--purple-lt);}
+.dotd-count-bar{margin-top:16px;padding:16px 20px;border-top:1px solid var(--grey2);}
+.dotd-count-title{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  font-family:'DM Mono',monospace;color:var(--text2);margin-bottom:10px;}
+.dotd-count-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px;}
+.dotd-count-item{display:flex;align-items:center;justify-content:space-between;padding:5px 10px;
+  border-radius:6px;background:var(--grey);font-size:12px;}
+.dotd-count-name{font-weight:500;}
+.dotd-count-num{font-family:'DM Mono',monospace;font-size:11px;color:var(--amber);font-weight:700;}
+
 /* Month Heatmap */
 .month-heatmap{background:white;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;}
 .heatmap-header{background:var(--navy);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;}
@@ -417,6 +438,28 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
           <div class="sidebar-card-header providers">👤 Provider Summary</div>
           <div id="VT_providerList"></div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DOTD Report -->
+  <div id="VT_dotdSection" style="display:none">
+    <div class="dotd-section">
+      <div class="dotd-header">
+        <h2>⭐ Doctor of the Day — Rotation Schedule</h2>
+        <button onclick="VT_exportDOTD()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:white;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;">⬇ Export CSV</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="dotd-table">
+          <thead><tr>
+            <th>Date</th><th>Day</th><th>DOTD — AM</th><th>DOTD — PM</th><th>Absences (skipped)</th>
+          </tr></thead>
+          <tbody id="VT_dotdBody"></tbody>
+        </table>
+      </div>
+      <div class="dotd-count-bar">
+        <div class="dotd-count-title">Assignment Counts — This Month</div>
+        <div class="dotd-count-grid" id="VT_dotdCounts"></div>
       </div>
     </div>
   </div>
@@ -973,6 +1016,169 @@ function VT_renderResults() {
   document.getElementById('VT_statsRow').style.display='grid';
   document.getElementById('VT_resultsSection').style.display='block';
   document.getElementById('VT_emptyState').style.display='none';
+
+  // Compute and render DOTD
+  VT_renderDOTD(month, year, numDays, dayData, monthName);
+}
+
+// ── DOCTOR OF THE DAY ────────────────────────────────────────────────────────
+// All 17 FT physicians in alphabetical order (per Feature Update Notes)
+const DOTD_ROSTER = [
+  {id:'bazargan', name:'Bazargan-Lari'},
+  {id:'chen',     name:'Chen'},
+  {id:'dao',      name:'Dao'},
+  {id:'fang',     name:'Fang'},
+  {id:'green',    name:'Green'},
+  {id:'hartmans', name:'Hartmans'},
+  {id:'kimm',     name:'Kimm'},
+  {id:'lagos',    name:'Lagos'},
+  {id:'moghtader',name:'Moghtader'},
+  {id:'morales',  name:'Morales'},
+  {id:'nguyen',   name:'Nguyen'},
+  {id:'nudell',   name:'Nudell'},
+  {id:'ozaki',    name:'Ozaki'},
+  {id:'pham',     name:'Pham'},
+  {id:'saeedian', name:'Saeedian'},
+  {id:'siegel',   name:'Siegel'},
+  {id:'zakka',    name:'Zakka'},
+];
+
+function VT_computeDOTD(month, year, numDays, dayData) {
+  const n = DOTD_ROSTER.length;
+  // Track counts for equity — use greedy "fewest assignments first" approach
+  const counts = {};
+  DOTD_ROSTER.forEach(p => counts[p.id] = 0);
+
+  // Two independent queues cycling through the roster
+  // AM starts at index 0, PM starts offset by half the roster so they're staggered
+  let amPtr = 0;
+  let pmPtr = Math.floor(n / 2);
+
+  const assignments = {};
+
+  for (let d = 1; d <= numDays; d++) {
+    const dd = dayData[d];
+    if (dd.isWeekend) continue;
+
+    // Build set of absent IDs for this day (cap codes only — same rule as absence cap)
+    const absentIds = new Set();
+    dd.capProviders.forEach(p => {
+      const id = nameToId(p.name);
+      if (id) absentIds.add(id);
+    });
+    // Also skip holiday wheel physicians on their holiday days
+    if (dd.hwInfo) {
+      dd.hwInfo.forEach(hw => {
+        HOLIDAY_WHEEL[hw.group].physicians.forEach(name => absentIds.add(name));
+      });
+    }
+
+    // Find AM: advance pointer until non-absent physician
+    let tries = 0;
+    while (absentIds.has(DOTD_ROSTER[amPtr % n].id) && tries < n) {
+      amPtr++; tries++;
+    }
+    const amDoc = DOTD_ROSTER[amPtr % n];
+    amPtr++;
+    counts[amDoc.id]++;
+
+    // Find PM: advance until non-absent AND different from AM
+    tries = 0;
+    while ((absentIds.has(DOTD_ROSTER[pmPtr % n].id) || DOTD_ROSTER[pmPtr % n].id === amDoc.id) && tries < n) {
+      pmPtr++; tries++;
+    }
+    const pmDoc = DOTD_ROSTER[pmPtr % n];
+    pmPtr++;
+    counts[pmDoc.id]++;
+
+    assignments[d] = {
+      am: amDoc,
+      pm: pmDoc,
+      absentNames: [...absentIds].map(id => {
+        const r = DOTD_ROSTER.find(p => p.id === id);
+        return r ? r.name : id;
+      }).filter(Boolean),
+    };
+  }
+
+  return { assignments, counts };
+}
+
+function VT_renderDOTD(month, year, numDays, dayData, monthName) {
+  const { assignments, counts } = VT_computeDOTD(month, year, numDays, dayData);
+  const dowNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const body = document.getElementById('VT_dotdBody');
+
+  body.innerHTML = '';
+  for (let d = 1; d <= numDays; d++) {
+    const dd = dayData[d];
+    const tr = document.createElement('tr');
+    const dateStr = `${String(month).padStart(2,'0')}/${String(d).padStart(2,'0')}`;
+    const dowStr = dowNames[dd.dow];
+
+    if (dd.isWeekend) {
+      tr.className = 'weekend-row';
+      tr.innerHTML = `<td>${dateStr}</td><td style="font-family:'DM Mono',monospace;font-size:10px">${dowStr}</td><td colspan="3" style="color:var(--grey3);font-style:italic;font-size:11px">Weekend</td>`;
+    } else if (dd.hwInfo) {
+      tr.className = 'hw-row';
+      const asn = assignments[d];
+      tr.innerHTML = `<td>${dateStr}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:10px">${dowStr}</td>
+        <td><span class="dotd-pill">${asn?.am.name||'—'}</span></td>
+        <td><span class="dotd-pill">${asn?.pm.name||'—'}</span></td>
+        <td style="font-size:11px;color:var(--purple)">🟣 Holiday Wheel (${dd.hwInfo[0].name})</td>`;
+    } else {
+      const asn = assignments[d];
+      const skipped = asn?.absentNames.length ? asn.absentNames.join(', ') : '—';
+      tr.innerHTML = `<td>${dateStr}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:10px">${dowStr}</td>
+        <td><span class="dotd-pill">${asn?.am.name||'—'}</span></td>
+        <td><span class="dotd-pill">${asn?.pm.name||'—'}</span></td>
+        <td style="font-size:11px;color:var(--text2)">${skipped}</td>`;
+    }
+    body.appendChild(tr);
+  }
+
+  // Count bar — sorted descending by count
+  const sorted = [...DOTD_ROSTER].sort((a,b) => (counts[b.id]||0) - (counts[a.id]||0));
+  const maxCount = Math.max(...sorted.map(p => counts[p.id]||0), 1);
+  document.getElementById('VT_dotdCounts').innerHTML = sorted.map(p => {
+    const c = counts[p.id] || 0;
+    const pct = Math.round((c / maxCount) * 100);
+    return `<div class="dotd-count-item" style="background:linear-gradient(90deg,var(--amber-lt) ${pct}%,var(--grey) ${pct}%)">
+      <span class="dotd-count-name">${p.name}</span>
+      <span class="dotd-count-num">${c}</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('VT_dotdSection').style.display = 'block';
+
+  // Store for export
+  window._VT_dotdData = { assignments, month, year, monthName, dowNames };
+}
+
+function VT_exportDOTD() {
+  const d = window._VT_dotdData;
+  if (!d) return;
+  const rows = [['Date','Day','DOTD AM','DOTD PM','Absences (skipped)']];
+  const numDays = new Date(d.year, d.month, 0).getDate();
+  for (let day = 1; day <= numDays; day++) {
+    const dow = new Date(d.year, d.month-1, day).getDay();
+    const isWeekend = dow === 0 || dow === 6;
+    const asn = d.assignments[day];
+    rows.push([
+      `${d.month}/${day}`,
+      d.dowNames[dow],
+      isWeekend ? '' : (asn?.am.name || ''),
+      isWeekend ? '' : (asn?.pm.name || ''),
+      isWeekend ? 'Weekend' : (asn?.absentNames.join(', ') || ''),
+    ]);
+  }
+  const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  a.download = `VeniceDOTD_${d.year}_${String(d.month).padStart(2,'0')}.csv`;
+  a.click();
 }
 
 function VT_exportCSV() {

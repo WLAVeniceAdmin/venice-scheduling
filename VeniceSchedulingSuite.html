@@ -460,8 +460,10 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
     <span class="status-msg" id="RA_statusMsg"></span>
   </div>
 
+  <div id="RA_vtBanner" style="display:none;background:var(--teal-lt);border:1px solid #a8ddd8;border-radius:var(--radius);padding:10px 18px;margin-bottom:14px;font-size:12px;color:var(--teal);font-family:'DM Mono',monospace;"></div>
+
   <div class="legend-card" id="RA_legendCard">
-    <div class="legend-title">Click provider to toggle absent · <span style="color:var(--teal)">VT data auto-loaded when available</span></div>
+    <div class="legend-title">Click provider to toggle absent manually · <span style="color:var(--teal)">Dimmed = absent per uploaded schedule</span></div>
     <div class="legend-grid" id="RA_providerLegend"></div>
   </div>
 
@@ -756,7 +758,7 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-bar-btn').forEach((b,i)=>
     b.classList.toggle('active',['vt','ra','np'][i]===tab));
   document.getElementById(`page-${tab}`).classList.add('active');
-  if(tab==='ra') RA_render();
+  if(tab==='ra') { RA_syncFromVT(); RA_render(); }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -996,7 +998,8 @@ function VT_exportCSV() {
 // ══════════════════════════════════════════════════════════════════════════════
 // ROOM ASSIGNMENT (RA_)
 // ══════════════════════════════════════════════════════════════════════════════
-let RA_absent = new Set();
+let RA_absent = new Set();      // manual toggles only
+let RA_vtAbsent = new Set();    // sourced from VT file data — refreshed on tab switch / date change
 let RA_scenarioAbsent = new Set();
 let RA_session = 'AM';
 let RA_currentView = 'daily';
@@ -1013,16 +1016,40 @@ function RA_init() {
   RA_render();
 }
 
-function RA_onDateChange() {
-  const d=new Date(document.getElementById('RA_dateInput').value+'T12:00:00');
-  // Auto-pull VT absences for this date
-  const vtAbsent=VT_getAbsencesForDate(document.getElementById('RA_dateInput').value);
-  if(vtAbsent.size>0) {
-    vtAbsent.forEach(id=>{
-      RA_absent.add(id);
-      document.getElementById(`RA_chip-${id}`)?.classList.add('toggled-off');
-    });
+function RA_syncFromVT() {
+  const dateStr = document.getElementById('RA_dateInput').value;
+  const fresh = VT_getAbsencesForDate(dateStr);
+  // Remove old VT chips from legend
+  RA_vtAbsent.forEach(id => {
+    if(!RA_absent.has(id))
+      document.getElementById(`RA_chip-${id}`)?.classList.remove('toggled-off');
+  });
+  RA_vtAbsent = fresh;
+  // Apply new VT chips to legend
+  RA_vtAbsent.forEach(id => {
+    document.getElementById(`RA_chip-${id}`)?.classList.add('toggled-off');
+  });
+  // Update banner
+  const banner = document.getElementById('RA_vtBanner');
+  if(banner) {
+    if(RA_vtAbsent.size > 0) {
+      const names = [...RA_vtAbsent].map(id => {
+        const p = FT_ALL.find(x=>x.id===id) || {name:id};
+        return p.name;
+      }).join(', ');
+      banner.textContent = `📋 ${RA_vtAbsent.size} absence${RA_vtAbsent.size!==1?'s':''} loaded from Vacation Tracker: ${names}`;
+      banner.style.display = 'block';
+    } else if(VT_providerData.length > 0) {
+      banner.textContent = '✅ Vacation Tracker loaded — no cap absences on this date';
+      banner.style.display = 'block';
+    } else {
+      banner.style.display = 'none';
+    }
   }
+}
+
+function RA_onDateChange() {
+  RA_syncFromVT();
   RA_render();
 }
 
@@ -1057,23 +1084,43 @@ function RA_buildLegend() {
 }
 
 function RA_toggleAbsent(id) {
-  if(RA_absent.has(id))RA_absent.delete(id);else RA_absent.add(id);
-  document.getElementById(`RA_chip-${id}`)?.classList.toggle('toggled-off');
+  if(RA_absent.has(id)) {
+    RA_absent.delete(id);
+    // only un-dim if also not in VT set
+    if(!RA_vtAbsent.has(id))
+      document.getElementById(`RA_chip-${id}`)?.classList.remove('toggled-off');
+  } else {
+    RA_absent.add(id);
+    document.getElementById(`RA_chip-${id}`)?.classList.add('toggled-off');
+  }
   RA_render();
 }
 
 function RA_resetAbsent() {
+  // only clears manual toggles — VT-sourced absences stay
   RA_absent.clear();
-  document.querySelectorAll('.legend-chip').forEach(c=>c.classList.remove('toggled-off'));
+  document.querySelectorAll('.legend-chip').forEach(c => {
+    const id = c.id.replace('RA_chip-','');
+    if(!RA_vtAbsent.has(id)) c.classList.remove('toggled-off');
+  });
   RA_render();
 }
 
+function RA_allAbsent() {
+  return new Set([...RA_vtAbsent, ...RA_absent]);
+}
+
 function RA_render() {
-  RA_renderModules('RA_modulesWrap',RA_absent);
-  if(RA_currentView==='scenario') RA_renderModules('RA_scenarioWrap',new Set([...RA_absent,...RA_scenarioAbsent]));
+  const combined = RA_allAbsent();
+  RA_renderModules('RA_modulesWrap', combined);
+  if(RA_currentView==='scenario') RA_renderModules('RA_scenarioWrap', new Set([...combined,...RA_scenarioAbsent]));
   if(RA_currentView==='month') RA_renderHeatmap();
-  const n=RA_absent.size;
-  document.getElementById('RA_statusMsg').textContent=n>0?`${n} provider${n>1?'s':''} marked absent`:'';
+  const manual = RA_absent.size;
+  const vt = RA_vtAbsent.size;
+  const parts = [];
+  if(vt > 0) parts.push(`${vt} from schedule`);
+  if(manual > 0) parts.push(`${manual} manual`);
+  document.getElementById('RA_statusMsg').textContent = parts.length ? parts.join(' · ') + ' absent' : '';
 }
 
 function RA_getShift(id,dow) {
@@ -1304,11 +1351,11 @@ function RA_buildScenarioSelect() {
 }
 function RA_addScenarioAbsent() {
   const v=document.getElementById('RA_scenarioProv').value;
-  if(v){RA_scenarioAbsent.add(v);RA_renderModules('RA_scenarioWrap',new Set([...RA_absent,...RA_scenarioAbsent]));}
+  if(v){RA_scenarioAbsent.add(v);RA_renderModules('RA_scenarioWrap',new Set([...RA_allAbsent(),...RA_scenarioAbsent]));}
 }
 function RA_resetScenario() {
   RA_scenarioAbsent.clear();
-  RA_renderModules('RA_scenarioWrap',new Set([...RA_absent,...RA_scenarioAbsent]));
+  RA_renderModules('RA_scenarioWrap',new Set([...RA_allAbsent(),...RA_scenarioAbsent]));
 }
 
 function RA_exportCSV() {

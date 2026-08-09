@@ -1,0 +1,1540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Venice Clinic — Scheduling Suite</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ── DESIGN TOKENS ── */
+:root {
+  --navy:#0f2540;--navy2:#1a3a5c;--blue:#1d6fa4;--blue-lt:#e8f3fb;
+  --teal:#0e8a7a;--teal-lt:#e3f5f3;--amber:#c47a1a;--amber-lt:#fef6e4;
+  --red:#b92d2d;--red-lt:#fdeaea;--purple:#6b3fa0;--purple-lt:#f0eaf9;
+  --green:#2d7a4f;--green-lt:#e8f5ee;--grey:#f4f6f8;--grey2:#e8ebee;
+  --grey3:#b0b8c4;--text:#1a2535;--text2:#4a5568;--white:#ffffff;
+  --radius:10px;--shadow:0 2px 12px rgba(15,37,64,.10);--shadow-lg:0 8px 32px rgba(15,37,64,.14);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:#f0f4f8;color:var(--text);min-height:100vh;}
+
+/* ── APP HEADER ── */
+.app-header{background:var(--navy);padding:0 32px;display:flex;align-items:center;
+  justify-content:space-between;height:62px;position:sticky;top:0;z-index:200;
+  box-shadow:0 2px 16px rgba(0,0,0,.18);}
+.logo{display:flex;align-items:center;gap:12px;}
+.logo-icon{width:32px;height:32px;background:var(--blue);border-radius:8px;
+  display:flex;align-items:center;justify-content:center;font-size:16px;}
+.logo-text{font-family:'Instrument Serif',serif;font-size:18px;color:white;letter-spacing:.01em;}
+.logo-sub{font-size:11px;color:rgba(255,255,255,.5);font-family:'DM Mono',monospace;
+  letter-spacing:.08em;text-transform:uppercase;}
+
+/* ── TAB BAR ── */
+.tab-bar{background:var(--navy2);padding:0 32px;display:flex;align-items:center;gap:2px;
+  border-bottom:2px solid rgba(255,255,255,.08);}
+.tab-bar-btn{padding:12px 22px;border:none;background:transparent;color:rgba(255,255,255,.55);
+  font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;
+  border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .18s;}
+.tab-bar-btn:hover{color:rgba(255,255,255,.85);}
+.tab-bar-btn.active{color:white;border-bottom-color:var(--teal);}
+
+/* ── PAGE SECTIONS ── */
+.page{display:none;}
+.page.active{display:block;}
+.main{max-width:1500px;margin:0 auto;padding:24px 24px 60px;}
+
+/* ── COMMON BUTTONS ── */
+.btn-primary{background:var(--navy);color:white;border:none;padding:10px 24px;border-radius:8px;
+  font-size:14px;font-weight:500;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .2s;}
+.btn-primary:hover{background:var(--navy2);transform:translateY(-1px);box-shadow:var(--shadow);}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+.btn-secondary{background:white;color:var(--navy);border:1.5px solid var(--grey2);padding:8px 18px;
+  border-radius:8px;font-size:13px;font-weight:500;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .2s;}
+.btn-secondary:hover{border-color:var(--blue);color:var(--blue);}
+
+/* ── SECTION TITLES ── */
+.section-title{font-family:'Instrument Serif',serif;font-size:20px;color:var(--navy);margin-bottom:4px;}
+.section-sub{font-size:12px;color:var(--text2);margin-bottom:20px;font-family:'DM Mono',monospace;letter-spacing:.03em;}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   VACATION TRACKER (VT_)
+══════════════════════════════════════════════════════════════════════════ */
+.vt-rules-banner{background:var(--navy);border-radius:var(--radius);padding:14px 22px;
+  display:flex;align-items:center;gap:24px;margin-bottom:24px;flex-wrap:wrap;}
+.vt-rule-item{display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(255,255,255,.75);}
+.rule-badge{padding:2px 8px;border-radius:10px;font-family:'DM Mono',monospace;font-size:11px;
+  font-weight:600;white-space:nowrap;}
+.rule-badge.cap{background:var(--red-lt);color:var(--red);}
+.rule-badge.ok{background:var(--teal-lt);color:var(--teal);}
+.rule-badge.hw{background:var(--purple-lt);color:var(--purple);}
+.rule-badge.code{background:rgba(255,255,255,.12);color:white;}
+
+.upload-section{background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:28px;margin-bottom:24px;}
+.upload-area{border:2px dashed var(--grey2);border-radius:var(--radius);padding:36px;text-align:center;
+  cursor:pointer;transition:all .2s;background:var(--grey);position:relative;}
+.upload-area:hover,.upload-area.dragover{border-color:var(--blue);background:var(--blue-lt);}
+.upload-area input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.upload-icon{font-size:32px;margin-bottom:10px;}
+.upload-label{font-size:14px;font-weight:500;color:var(--navy);margin-bottom:4px;}
+.upload-hint{font-size:12px;color:var(--text2);font-family:'DM Mono',monospace;}
+.file-list{margin-top:16px;display:flex;flex-wrap:wrap;gap:8px;}
+.file-chip{background:var(--blue-lt);border:1px solid #bee0f5;color:var(--blue);padding:4px 10px 4px 8px;
+  border-radius:20px;font-size:12px;font-family:'DM Mono',monospace;display:flex;align-items:center;gap:6px;}
+.file-chip .remove{cursor:pointer;opacity:.5;font-size:14px;line-height:1;}
+.file-chip .remove:hover{opacity:1;}
+
+.stats-row{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:24px;}
+.stat-card{background:white;border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow);border-top:3px solid transparent;}
+.stat-card.ok{border-color:var(--teal);}
+.stat-card.warn{border-color:var(--amber);}
+.stat-card.flag{border-color:var(--red);}
+.stat-card.info{border-color:var(--blue);}
+.stat-card.hw{border-color:var(--purple);}
+.stat-label{font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px;}
+.stat-value{font-size:28px;font-weight:600;color:var(--navy);line-height:1;}
+.stat-value.ok{color:var(--teal);}
+.stat-value.warn{color:var(--amber);}
+.stat-value.flag{color:var(--red);}
+.stat-value.hw{color:var(--purple);}
+
+.results-layout{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start;}
+.calendar-card{background:white;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;}
+.calendar-header{background:var(--navy);padding:16px 24px;display:flex;align-items:center;justify-content:space-between;}
+.calendar-header h2{font-family:'Instrument Serif',serif;font-size:20px;color:white;}
+.calendar-header .export-btn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);
+  color:white;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;
+  font-family:'DM Sans',sans-serif;transition:all .2s;}
+.calendar-header .export-btn:hover{background:rgba(255,255,255,.22);}
+.cal-table-wrap{overflow-x:auto;}
+.cal-table{width:100%;border-collapse:collapse;font-size:12px;}
+.cal-table th{background:var(--grey);padding:8px 10px;text-align:center;font-weight:600;
+  font-family:'DM Mono',monospace;font-size:11px;color:var(--text2);letter-spacing:.05em;
+  border-bottom:2px solid var(--grey2);white-space:nowrap;}
+.cal-table th.date-col{min-width:54px;text-align:left;padding-left:16px;}
+.cal-table th.count-col{min-width:44px;}
+.cal-table th.provider-col{min-width:90px;}
+.cal-table td{padding:6px 10px;text-align:center;border-bottom:1px solid var(--grey2);vertical-align:middle;}
+.cal-table td.date-col{text-align:left;padding-left:16px;font-family:'DM Mono',monospace;font-size:11px;color:var(--text2);white-space:nowrap;}
+.cal-table td.dow-col{font-family:'DM Mono',monospace;font-size:10px;color:var(--grey3);}
+.cal-table tr.weekend td{background:#fafbfc;}
+.cal-table tr.at-limit td{background:var(--amber-lt);}
+.cal-table tr.flagged td{background:var(--red-lt);}
+.cal-table tr.holiday-wheel td{background:var(--purple-lt);}
+.cal-table tr:hover td{filter:brightness(.97);}
+.code-pill{display:inline-block;padding:2px 7px;border-radius:10px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;}
+.code-pill.VAC{background:#fdeaea;color:var(--red);}
+.code-pill.EL{background:#e8f0fe;color:#1a56db;}
+.code-pill.LOA{background:#fef6e4;color:var(--amber);}
+.code-pill.VV{background:var(--teal-lt);color:var(--teal);}
+.code-pill.clinic{background:var(--teal-lt);color:var(--teal);}
+.code-pill.off{background:var(--grey);color:var(--grey3);}
+.code-pill.hw{background:var(--purple-lt);color:var(--purple);}
+.count-bubble{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;
+  border-radius:50%;font-weight:700;font-size:12px;font-family:'DM Mono',monospace;}
+.count-bubble.ok{background:var(--teal-lt);color:var(--teal);}
+.count-bubble.warn{background:var(--amber-lt);color:var(--amber);}
+.count-bubble.flag{background:var(--red-lt);color:var(--red);}
+.count-bubble.hw{background:var(--purple-lt);color:var(--purple);}
+.sidebar{display:flex;flex-direction:column;gap:16px;}
+.sidebar-card{background:white;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;}
+.sidebar-card-header{padding:14px 18px;font-weight:600;font-size:13px;display:flex;align-items:center;gap:8px;}
+.sidebar-card-header.alerts{background:var(--red-lt);color:var(--red);}
+.sidebar-card-header.hw{background:var(--purple-lt);color:var(--purple);}
+.sidebar-card-header.summary{background:var(--blue-lt);color:var(--blue);}
+.sidebar-card-header.providers{background:var(--grey);color:var(--navy);}
+.alert-item{padding:10px 18px;border-bottom:1px solid var(--grey2);font-size:12px;}
+.alert-item:last-child{border-bottom:none;}
+.alert-date{font-family:'DM Mono',monospace;font-weight:500;font-size:11px;margin-bottom:3px;}
+.alert-who{color:var(--text2);line-height:1.4;}
+.hw-item{padding:8px 18px;border-bottom:1px solid #ede0f8;font-size:12px;display:flex;align-items:center;gap:8px;}
+.hw-item:last-child{border-bottom:none;}
+.hw-dot{width:8px;height:8px;border-radius:50%;background:var(--purple);flex-shrink:0;}
+.hw-text{color:var(--text2);}
+.provider-row{padding:8px 18px;border-bottom:1px solid var(--grey2);display:flex;align-items:center;justify-content:space-between;font-size:12px;}
+.provider-row:last-child{border-bottom:none;}
+.provider-name{font-weight:500;}
+.provider-count{font-family:'DM Mono',monospace;font-size:11px;color:var(--text2);}
+.legend{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:10px 24px 12px;
+  background:var(--grey);border-top:1px solid var(--grey2);font-size:11px;font-family:'DM Mono',monospace;color:var(--text2);}
+.legend-item{display:flex;align-items:center;gap:5px;}
+.legend-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0;}
+.empty-state{padding:60px 40px;text-align:center;color:var(--text2);}
+.empty-state .empty-icon{font-size:48px;margin-bottom:14px;opacity:.4;}
+.empty-state h3{font-family:'Instrument Serif',serif;font-size:20px;color:var(--navy);margin-bottom:6px;}
+.empty-state p{font-size:13px;max-width:320px;margin:0 auto;line-height:1.6;}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ROOM ASSIGNMENT (RA_)
+══════════════════════════════════════════════════════════════════════════ */
+.view-tabs{display:flex;gap:4px;background:white;border-radius:var(--radius);
+  padding:6px;box-shadow:var(--shadow);margin-bottom:20px;width:fit-content;}
+.ra-tab-btn{padding:8px 20px;border-radius:7px;border:none;cursor:pointer;
+  font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;
+  color:var(--text2);background:transparent;transition:all .18s;}
+.ra-tab-btn.active{background:var(--navy);color:white;}
+.ra-tab-btn:not(.active):hover{background:var(--grey);}
+.controls-bar{background:white;border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:14px 20px;margin-bottom:18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+.ctrl-label{font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;letter-spacing:.05em;text-transform:uppercase;}
+.ctrl-group{display:flex;align-items:center;gap:8px;}
+input[type=date],select{border:1.5px solid var(--grey2);border-radius:7px;padding:7px 12px;
+  font-size:13px;font-family:'DM Sans',sans-serif;color:var(--text);background:white;cursor:pointer;transition:border-color .18s;}
+input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
+.session-toggle{display:flex;gap:3px;background:var(--grey);border-radius:8px;padding:3px;}
+.sess-btn{padding:5px 14px;border-radius:6px;border:none;cursor:pointer;font-size:11px;
+  font-family:'DM Mono',monospace;font-weight:500;color:var(--text2);background:transparent;transition:all .15s;}
+.sess-btn.active{background:white;color:var(--navy);box-shadow:0 1px 4px rgba(0,0,0,.1);}
+.legend-card{background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 20px;margin-bottom:18px;}
+.legend-title{font-size:11px;font-weight:600;color:var(--text2);font-family:'DM Mono',monospace;
+  letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px;}
+.legend-grid{display:flex;flex-wrap:wrap;gap:6px;}
+.legend-chip{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;
+  font-size:11px;font-weight:500;cursor:pointer;border:1.5px solid transparent;transition:all .15s;user-select:none;}
+.legend-chip.ft{background:var(--blue-lt);color:var(--blue);border-color:#bee0f5;}
+.legend-chip.float{background:var(--teal-lt);color:var(--teal);border-color:#a8ddd8;}
+.legend-chip.np{background:var(--purple-lt);color:var(--purple);border-color:#d4b8f5;}
+.legend-chip.toggled-off{opacity:.28;filter:grayscale(1);}
+.legend-sep{width:1px;height:20px;background:var(--grey2);margin:0 4px;}
+.modules-wrap{display:flex;flex-direction:column;gap:20px;}
+.module-section{background:white;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;}
+.module-section-header{padding:11px 18px;font-weight:700;font-size:12px;
+  font-family:'DM Mono',monospace;letter-spacing:.06em;display:flex;align-items:center;justify-content:space-between;}
+.module-section-header.venice{background:var(--navy);color:white;}
+.module-section-header.mod150{background:var(--teal);color:white;}
+.module-section-header.bariatrics{background:var(--purple);color:white;}
+.rooms-grid{display:grid;gap:0;border-top:1px solid var(--grey2);}
+.rooms-grid.venice-grid{grid-template-columns:repeat(8,1fr);}
+.room-card{border-right:1px solid var(--grey2);border-bottom:1px solid var(--grey2);
+  padding:10px 12px;min-height:68px;display:flex;flex-direction:column;gap:5px;transition:background .15s;}
+.room-card:hover{background:var(--grey);}
+.room-card.special{background:#fafbfc;}
+.room-num{font-family:'DM Mono',monospace;font-size:10px;color:var(--grey3);font-weight:600;letter-spacing:.05em;}
+.room-label{font-size:9px;color:var(--grey3);font-family:'DM Mono',monospace;margin-top:-3px;}
+.provider-tag{font-size:12px;font-weight:600;padding:4px 8px;border-radius:6px;
+  cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .15s;}
+.provider-tag.ft{background:var(--blue-lt);color:var(--blue);}
+.provider-tag.float{background:var(--teal-lt);color:var(--teal);}
+.provider-tag.np{background:var(--purple-lt);color:var(--purple);}
+.provider-tag.empty{background:var(--grey);color:var(--grey3);font-style:italic;cursor:default;font-weight:400;}
+.provider-tag.out{background:var(--red-lt);color:var(--red);text-decoration:line-through;opacity:.6;cursor:default;}
+.provider-tag.admin{background:var(--grey);color:var(--text2);cursor:default;font-size:11px;}
+.provider-tag.special-room{background:var(--amber-lt);color:var(--amber);cursor:default;font-size:11px;}
+.provider-tag.vv-tag{background:var(--teal-lt);color:var(--teal);font-style:italic;}
+.session-code{font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);margin-top:1px;}
+.float-section{background:white;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin-top:20px;}
+.float-header{background:var(--teal);color:white;padding:11px 18px;font-weight:700;font-size:12px;
+  font-family:'DM Mono',monospace;letter-spacing:.06em;}
+.float-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:1px solid var(--grey2);}
+.float-doctor{border-right:1px solid var(--grey2);padding:14px 18px;}
+.float-doctor:last-child{border-right:none;}
+.float-name{font-weight:700;font-size:13px;color:var(--teal);margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+.float-schedule{display:flex;flex-direction:column;gap:4px;}
+.float-row{display:flex;align-items:center;gap:8px;font-size:12px;}
+.float-session{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--text2);width:28px;flex-shrink:0;}
+.float-rooms{font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:var(--teal);background:var(--teal-lt);padding:2px 8px;border-radius:10px;}
+.float-code{font-size:11px;color:var(--grey3);font-family:'DM Mono',monospace;}
+.scenario-banner{background:var(--amber-lt);border:1.5px solid #f0d090;border-radius:var(--radius);
+  padding:10px 18px;font-size:12px;color:var(--amber);margin-bottom:16px;display:flex;align-items:center;gap:10px;}
+.avail-section{background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 20px;margin-top:20px;}
+.avail-title{font-size:12px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text2);
+  letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px;}
+.avail-chips{display:flex;flex-wrap:wrap;gap:6px;}
+.avail-chip{background:var(--green-lt);color:var(--green);border:1px solid #a8d8be;
+  padding:3px 10px;border-radius:12px;font-size:11px;font-family:'DM Mono',monospace;font-weight:600;}
+.status-msg{font-size:11px;color:var(--grey3);font-family:'DM Mono',monospace;margin-left:auto;}
+.export-bar{display:flex;gap:10px;margin-top:16px;}
+
+/* Month Heatmap */
+.month-heatmap{background:white;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;}
+.heatmap-header{background:var(--navy);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;}
+.heatmap-header h2{font-family:'Instrument Serif',serif;font-size:18px;color:white;}
+.heatmap-nav{display:flex;align-items:center;gap:10px;}
+.heatmap-nav button{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);
+  color:white;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-family:'DM Sans',sans-serif;}
+.heatmap-nav button:hover{background:rgba(255,255,255,.22);}
+.heatmap-grid{padding:16px;}
+.heatmap-dow-row{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px;}
+.heatmap-dow-cell{text-align:center;font-size:10px;font-family:'DM Mono',monospace;
+  color:var(--text2);font-weight:600;padding:4px;}
+.heatmap-week{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px;}
+.heatmap-day{border-radius:6px;padding:6px 4px;min-height:52px;font-size:10px;
+  font-family:'DM Mono',monospace;cursor:default;position:relative;border:1.5px solid transparent;}
+.heatmap-day.empty{background:transparent;}
+.heatmap-day.weekend{background:#f8f9fa;color:var(--grey3);}
+.heatmap-day.ok{background:var(--teal-lt);border-color:#b0ddd8;}
+.heatmap-day.warn{background:var(--amber-lt);border-color:#f0d090;}
+.heatmap-day.flag{background:var(--red-lt);border-color:#f5b8b8;}
+.heatmap-day.hw{background:var(--purple-lt);border-color:#d4b8f5;}
+.heatmap-day-num{font-weight:700;font-size:11px;margin-bottom:2px;}
+.heatmap-day.today .heatmap-day-num{background:var(--navy);color:white;border-radius:50%;
+  width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;}
+.heatmap-absent-count{font-size:9px;font-weight:600;opacity:.8;}
+.heatmap-names{font-size:8px;opacity:.7;line-height:1.3;margin-top:1px;}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   NP/PA TRACKER (NP_)
+══════════════════════════════════════════════════════════════════════════ */
+.np-rules-banner{background:var(--navy);border-radius:var(--radius);padding:14px 22px;
+  display:flex;align-items:center;gap:24px;margin-bottom:24px;flex-wrap:wrap;}
+.np-rule-item{display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(255,255,255,.75);}
+
+.np-layout{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start;}
+.np-card{background:white;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin-bottom:20px;}
+.np-card-header{background:var(--purple);color:white;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;}
+.np-card-header h2{font-family:'Instrument Serif',serif;font-size:18px;}
+.np-provider-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;padding:16px;}
+.np-prov-card{border:1.5px solid var(--grey2);border-radius:8px;padding:14px 16px;background:var(--grey);}
+.np-prov-name{font-weight:600;font-size:13px;color:var(--navy);margin-bottom:4px;}
+.np-prov-sub{font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;margin-bottom:10px;}
+.np-prov-card.absent-card{background:var(--red-lt);border-color:#f5b8b8;}
+.np-prov-card.absent-card .np-prov-name{color:var(--red);}
+
+.np-cal-table{width:100%;border-collapse:collapse;font-size:12px;}
+.np-cal-table th{background:var(--grey);padding:7px 10px;text-align:center;font-weight:600;
+  font-family:'DM Mono',monospace;font-size:10px;color:var(--text2);letter-spacing:.04em;border-bottom:2px solid var(--grey2);}
+.np-cal-table td{padding:5px 8px;text-align:center;border-bottom:1px solid var(--grey2);vertical-align:middle;font-size:11px;}
+.np-cal-table td.np-date{text-align:left;padding-left:12px;font-family:'DM Mono',monospace;font-size:10px;color:var(--text2);}
+.np-cal-table tr.np-cap-hit td{background:var(--red-lt);}
+.np-cal-table tr.np-weekend td{background:#fafbfc;}
+.np-cap-badge{display:inline-flex;align-items:center;justify-content:center;
+  padding:2px 8px;border-radius:10px;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;}
+.np-cap-badge.ok{background:var(--teal-lt);color:var(--teal);}
+.np-cap-badge.cap{background:var(--red-lt);color:var(--red);}
+
+.np-alert-card{background:white;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin-bottom:16px;}
+.np-alert-header{padding:12px 16px;font-weight:600;font-size:12px;display:flex;align-items:center;gap:8px;}
+.np-alert-header.red{background:var(--red-lt);color:var(--red);}
+.np-alert-header.purple{background:var(--purple-lt);color:var(--purple);}
+.np-alert-item{padding:8px 16px;border-bottom:1px solid var(--grey2);font-size:12px;}
+.np-alert-item:last-child{border-bottom:none;}
+
+.np-entry-form{background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;margin-bottom:20px;}
+.np-entry-form h3{font-family:'Instrument Serif',serif;font-size:16px;color:var(--navy);margin-bottom:16px;}
+.form-row{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end;}
+.form-group label{display:block;font-size:11px;font-family:'DM Mono',monospace;color:var(--text2);
+  letter-spacing:.04em;text-transform:uppercase;margin-bottom:5px;}
+.form-group input,.form-group select{width:100%;border:1.5px solid var(--grey2);border-radius:7px;
+  padding:8px 12px;font-size:13px;font-family:'DM Sans',sans-serif;}
+
+.np-upload-section{background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;margin-bottom:20px;}
+
+@media(max-width:1100px){
+  .results-layout,.np-layout{grid-template-columns:1fr;}
+  .stats-row{grid-template-columns:repeat(3,1fr);}
+}
+@media(max-width:700px){
+  .form-row{grid-template-columns:1fr;}
+  .np-provider-grid{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ APP HEADER ═══ -->
+<header class="app-header">
+  <div class="logo">
+    <div class="logo-icon">🏥</div>
+    <div>
+      <div class="logo-text">Venice Clinic</div>
+      <div class="logo-sub">Scheduling Suite</div>
+    </div>
+  </div>
+  <div id="headerBadge" style="font-size:11px;color:rgba(255,255,255,.5);font-family:'DM Mono',monospace;"></div>
+</header>
+
+<!-- ═══ TAB BAR ═══ -->
+<nav class="tab-bar">
+  <button class="tab-bar-btn active" onclick="switchTab('vt')">📅 Vacation Tracker</button>
+  <button class="tab-bar-btn" onclick="switchTab('ra')">🏥 Room Assignment</button>
+  <button class="tab-bar-btn" onclick="switchTab('np')">👩‍⚕️ NP/PA Tracker</button>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TAB 1 — VACATION TRACKER
+═══════════════════════════════════════════════════════════ -->
+<div id="page-vt" class="page active">
+<div class="main">
+
+  <div class="vt-rules-banner">
+    <div class="vt-rule-item"><span class="rule-badge cap">CAP: 4 physicians</span><span>max simultaneous absence</span></div>
+    <div class="vt-rule-item"><span class="rule-badge ok">Counts: VAC · EL · LOA</span></div>
+    <div class="vt-rule-item"><span class="rule-badge code">Excluded: SL · OFF · ET · IPS · AT · IW · NC · VV</span></div>
+    <div class="vt-rule-item"><span class="rule-badge hw">🟣 Holiday Wheel = pre-approved</span></div>
+  </div>
+
+  <div class="upload-section">
+    <div class="section-title">Load Provider Schedules</div>
+    <div class="section-sub">UPLOAD .XLSM OR .XLS FILES — ONE PER PROVIDER</div>
+    <div class="upload-area" id="VT_dropZone">
+      <input type="file" id="VT_fileInput" multiple accept=".xlsm,.xls,.xlsx">
+      <div class="upload-icon">📂</div>
+      <div class="upload-label">Drop provider schedule files here</div>
+      <div class="upload-hint">Accepts .xlsm · .xls · .xlsx — multiple files at once</div>
+    </div>
+    <div class="file-list" id="VT_fileList"></div>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:16px;">
+      <button class="btn-primary" id="VT_processBtn" disabled onclick="VT_processFiles()">⚡ Compile Schedule</button>
+      <button class="btn-secondary" id="VT_clearBtn" onclick="VT_clearAll()" style="display:none">Clear All</button>
+    </div>
+  </div>
+
+  <div class="stats-row" id="VT_statsRow" style="display:none">
+    <div class="stat-card info"><div class="stat-label">Providers Loaded</div><div class="stat-value" id="VT_statProviders">0</div></div>
+    <div class="stat-card ok"><div class="stat-label">Days OK (0–3 out)</div><div class="stat-value ok" id="VT_statOk">0</div></div>
+    <div class="stat-card warn"><div class="stat-label">At Limit (4 out)</div><div class="stat-value warn" id="VT_statWarn">0</div></div>
+    <div class="stat-card flag"><div class="stat-label">Flagged (5+ out)</div><div class="stat-value flag" id="VT_statFlag">0</div></div>
+    <div class="stat-card hw"><div class="stat-label">Holiday Wheel Days</div><div class="stat-value hw" id="VT_statHw">0</div></div>
+  </div>
+
+  <div id="VT_resultsSection" style="display:none">
+    <div class="results-layout">
+      <div class="calendar-card">
+        <div class="calendar-header">
+          <h2 id="VT_calTitle">Monthly Schedule</h2>
+          <button class="export-btn" onclick="VT_exportCSV()">⬇ Export CSV</button>
+        </div>
+        <div class="cal-table-wrap">
+          <table class="cal-table"><thead id="VT_calHead"></thead><tbody id="VT_calBody"></tbody></table>
+        </div>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--red-lt);border:1px solid #f5b8b8"></div>5+ out — FLAGGED</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--amber-lt);border:1px solid #f0d090"></div>4 out — At Limit</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--purple-lt);border:1px solid #d4b8f5"></div>Holiday Wheel</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--grey2)"></div>Weekend</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--teal-lt);border:1px solid #a8ddd8"></div>VV (virtual — not capped)</div>
+        </div>
+      </div>
+      <div class="sidebar">
+        <div class="sidebar-card" id="VT_flagCard">
+          <div class="sidebar-card-header alerts">🚨 Action Required</div>
+          <div id="VT_flagList"></div>
+        </div>
+        <div class="sidebar-card" id="VT_hwCard">
+          <div class="sidebar-card-header hw">🟣 Holiday Wheel (Pre-Approved)</div>
+          <div id="VT_hwList"></div>
+        </div>
+        <div class="sidebar-card">
+          <div class="sidebar-card-header providers">👤 Provider Summary</div>
+          <div id="VT_providerList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="empty-state" id="VT_emptyState">
+    <div class="empty-icon">🗓</div>
+    <h3>No schedule loaded yet</h3>
+    <p>Upload individual provider .xlsm or .xls schedule request files above to compile the monthly master schedule.</p>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TAB 2 — ROOM ASSIGNMENT
+═══════════════════════════════════════════════════════════ -->
+<div id="page-ra" class="page">
+<div class="main">
+
+  <div class="view-tabs">
+    <button class="ra-tab-btn active" onclick="RA_switchView('daily',this)">📅 Daily View</button>
+    <button class="ra-tab-btn" onclick="RA_switchView('month',this)">📆 Month Heatmap</button>
+    <button class="ra-tab-btn" onclick="RA_switchView('scenario',this)">🔄 Scenario Planning</button>
+  </div>
+
+  <div class="controls-bar">
+    <div class="ctrl-group">
+      <span class="ctrl-label">Date</span>
+      <input type="date" id="RA_dateInput" onchange="RA_onDateChange()">
+    </div>
+    <div class="ctrl-group">
+      <span class="ctrl-label">Session</span>
+      <div class="session-toggle">
+        <button class="sess-btn active" onclick="RA_setSession('AM',this)">AM</button>
+        <button class="sess-btn" onclick="RA_setSession('PM',this)">PM</button>
+        <button class="sess-btn" onclick="RA_setSession('EVE',this)">EVE</button>
+      </div>
+    </div>
+    <button class="btn-primary" onclick="RA_render()">⚡ Refresh</button>
+    <button class="btn-secondary" onclick="RA_resetAbsent()">↺ Reset Absent</button>
+    <span class="status-msg" id="RA_statusMsg"></span>
+  </div>
+
+  <div class="legend-card" id="RA_legendCard">
+    <div class="legend-title">Click provider to toggle absent · <span style="color:var(--teal)">VT data auto-loaded when available</span></div>
+    <div class="legend-grid" id="RA_providerLegend"></div>
+  </div>
+
+  <!-- Daily View -->
+  <div id="RA_dailyView">
+    <div class="modules-wrap" id="RA_modulesWrap"></div>
+    <div class="export-bar">
+      <button class="btn-secondary" onclick="RA_exportCSV()">⬇ Export CSV</button>
+      <button class="btn-secondary" onclick="window.print()">🖨 Print</button>
+    </div>
+  </div>
+
+  <!-- Month Heatmap -->
+  <div id="RA_monthView" style="display:none">
+    <div class="month-heatmap">
+      <div class="heatmap-header">
+        <h2 id="RA_heatmapTitle">Room Assignment — Monthly Overview</h2>
+        <div class="heatmap-nav">
+          <button onclick="RA_heatmapPrev()">‹ Prev</button>
+          <button onclick="RA_heatmapNext()">Next ›</button>
+        </div>
+      </div>
+      <div class="heatmap-grid" id="RA_heatmapGrid"></div>
+    </div>
+  </div>
+
+  <!-- Scenario View -->
+  <div id="RA_scenarioView" style="display:none">
+    <div class="scenario-banner">
+      🔄 <strong>Scenario Planning</strong> — Mark additional providers absent to preview coverage impact.
+    </div>
+    <div class="controls-bar" style="margin-bottom:16px">
+      <div class="ctrl-group">
+        <span class="ctrl-label">Mark Absent</span>
+        <select id="RA_scenarioProv"><option value="">— Select —</option></select>
+      </div>
+      <button class="btn-primary" onclick="RA_addScenarioAbsent()">Mark Absent</button>
+      <button class="btn-secondary" onclick="RA_resetScenario()">Reset Scenario</button>
+    </div>
+    <div class="modules-wrap" id="RA_scenarioWrap"></div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TAB 3 — NP/PA TRACKER
+═══════════════════════════════════════════════════════════ -->
+<div id="page-np" class="page">
+<div class="main">
+
+  <div class="np-rules-banner">
+    <div class="np-rule-item"><span class="rule-badge cap">CAP: 1 NP/PA out max</span></div>
+    <div class="np-rule-item"><span class="rule-badge ok">Staff NPs: Jimenez · Elevado · Keough · Tan</span></div>
+    <div class="np-rule-item"><span class="rule-badge code">Per diems tracked separately — not capped</span></div>
+  </div>
+
+  <div class="np-upload-section">
+    <div class="section-title">Load NP/PA Schedules</div>
+    <div class="section-sub">UPLOAD .XLSM OR .XLS NP SCHEDULE FILES</div>
+    <div class="upload-area" id="NP_dropZone">
+      <input type="file" id="NP_fileInput" multiple accept=".xlsm,.xls,.xlsx">
+      <div class="upload-icon">📂</div>
+      <div class="upload-label">Drop NP/PA schedule files here</div>
+      <div class="upload-hint">Same format as physician files</div>
+    </div>
+    <div class="file-list" id="NP_fileList"></div>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button class="btn-primary" id="NP_processBtn" disabled onclick="NP_processFiles()">⚡ Compile NP Schedule</button>
+      <button class="btn-secondary" id="NP_clearBtn" onclick="NP_clearAll()" style="display:none">Clear</button>
+    </div>
+  </div>
+
+  <div class="np-entry-form">
+    <h3>Manual Absence Entry</h3>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Provider</label>
+        <select id="NP_manualProv">
+          <option value="">— Select NP/PA —</option>
+          <option value="jimenez">Jimenez, I</option>
+          <option value="elevado">Elevado, G</option>
+          <option value="keough">Keough, P</option>
+          <option value="tan">Tan, A</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Start Date</label>
+        <input type="date" id="NP_startDate">
+      </div>
+      <div class="form-group">
+        <label>End Date</label>
+        <input type="date" id="NP_endDate">
+      </div>
+      <button class="btn-primary" style="padding:8px 18px;align-self:flex-end" onclick="NP_addManual()">Add</button>
+    </div>
+  </div>
+
+  <div class="np-layout">
+    <div>
+      <!-- Provider status cards -->
+      <div class="np-card">
+        <div class="np-card-header">
+          <h2>Staff NP/PA Status</h2>
+          <span id="NP_monthBadge" style="font-size:11px;opacity:.7;font-family:'DM Mono',monospace;"></span>
+        </div>
+        <div class="np-provider-grid" id="NP_providerGrid"></div>
+      </div>
+
+      <!-- Calendar -->
+      <div class="np-card" id="NP_calCard" style="display:none">
+        <div class="np-card-header">
+          <h2 id="NP_calTitle">Monthly NP/PA Calendar</h2>
+          <button onclick="NP_exportCSV()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:white;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-family:'DM Sans',sans-serif;">⬇ Export CSV</button>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="np-cal-table"><thead id="NP_calHead"></thead><tbody id="NP_calBody"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div id="NP_sidebar">
+      <div class="np-alert-card">
+        <div class="np-alert-header red">🚨 Cap Alerts</div>
+        <div id="NP_alertList"><div class="np-alert-item" style="color:var(--grey3);">No data loaded</div></div>
+      </div>
+      <div class="np-alert-card">
+        <div class="np-alert-header purple">👤 Manually Entered Absences</div>
+        <div id="NP_manualList"><div class="np-alert-item" style="color:var(--grey3);">None entered</div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+// ══════════════════════════════════════════════════════════════════════════════
+// SHARED DATA
+// ══════════════════════════════════════════════════════════════════════════════
+
+const HOLIDAY_WHEEL = {
+  A: { name:'Thanksgiving', physicians:['bazargan-lari','bazargan','kimm','lagos','morales','pham','tsung'], dates: hwRange(2026,11,23,29) },
+  B: { name:'Christmas',    physicians:['dao','fang','green','nguyen','nudell','ozaki'],                    dates: hwRange(2026,12,21,27) },
+  C: { name:'New Year',     physicians:['chen','hartmans','moghtader','saeedian','siegel','zakka'],         dates: [...hwRange(2026,12,28,31),...hwRange(2027,1,1,3)] }
+};
+function hwRange(y,m,s,e){const o=[];for(let d=s;d<=e;d++)o.push(dateKey(new Date(y,m-1,d)));return o;}
+function dateKey(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+const HW_DATES={};
+Object.entries(HOLIDAY_WHEEL).forEach(([g,info])=>info.dates.forEach(dk=>{if(!HW_DATES[dk])HW_DATES[dk]=[];HW_DATES[dk].push({group:g,name:info.name});}));
+
+// FT Physicians
+const FT_MAIN = [
+  {id:'siegel',   name:'Siegel',       fullName:'Siegel, J',       rooms:[1,4]},
+  {id:'morales',  name:'Morales',      fullName:'Morales, G',      rooms:[2,3]},
+  {id:'nudell',   name:'Nudell',       fullName:'Nudell, J',       rooms:[5,6]},
+  {id:'zakka',    name:'Zakka',        fullName:'Zakka, K',        rooms:[7,8]},
+  {id:'fang',     name:'Fang',         fullName:'Fang, K',         rooms:[9,10]},
+  {id:'saeedian', name:'Saeedian',     fullName:'Saeedian, J',     rooms:[11,12]},
+  {id:'nguyen',   name:'Nguyen',       fullName:'Nguyen, L',       rooms:[13,14]},
+  {id:'ozaki',    name:'Ozaki',        fullName:'Ozaki, R',        rooms:[15,16]},
+  {id:'pham',     name:'Pham',         fullName:'Pham, A',         rooms:[17,18]},
+  {id:'moghtader',name:'Moghtader',    fullName:'Moghtader, S',    rooms:[21,22]},
+  {id:'chen',     name:'Chen',         fullName:'Chen, A',         rooms:[23,24]},
+  {id:'kimm',     name:'Kimm',         fullName:'Kimm, S',         rooms:[25,26]},
+];
+const FT_MOD150 = [
+  {id:'bazargan', name:'Bazargan-Lari',fullName:'Bazargan-Lari',   rooms:['M','N']},
+  {id:'green',    name:'Green',        fullName:'Green, D',         rooms:['O','P']},
+  {id:'hartmans', name:'Hartmans',     fullName:'Hartmans, S',      rooms:['R','S']},
+];
+const FT_ALL = [...FT_MAIN, ...FT_MOD150];
+
+const FLOAT_SCHEDULE = {
+  dao: {
+    name:'Dao',
+    schedule:{
+      1:{AM:{rooms:[],code:'VV'},PM:{rooms:[],code:'OFF'},EVE:null},
+      2:{AM:{rooms:[7,8]},PM:{rooms:[],code:'ET'},EVE:null},
+      3:{AM:{rooms:[25,26]},PM:{rooms:[25,26]},EVE:{rooms:[25,26]}},
+      4:{AM:{rooms:[9,10]},PM:{rooms:[5,6]},EVE:{rooms:[5,6]}},
+      5:{AM:{rooms:[15,16]},PM:{rooms:[25,26]},EVE:null},
+    }
+  },
+  lagos: {
+    name:'Lagos',
+    schedule:{
+      1:{AM:{rooms:[17,18]},PM:{rooms:[17,18]},EVE:null},
+      2:{AM:{rooms:[11,12]},PM:{rooms:[],code:'ET'},EVE:null},
+      3:{AM:{rooms:[17,18]},PM:{rooms:[5,6]},EVE:null},
+      4:{AM:{rooms:[13,14]},PM:{rooms:[13,14]},EVE:null},
+      5:{AM:{rooms:[5,6]},PM:{rooms:[5,6]},EVE:null},
+    }
+  }
+};
+
+const WEEKLY_SHIFTS = {
+  siegel:   {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'},3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'VV'}},
+  morales:  {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'},3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
+  nudell:   {1:{am:'VV',pm:'F2F'}, 2:{am:'VV',pm:'F2F'}, 3:{am:'F2F',pm:'ET'},4:{am:'F2F',pm:'OFF'},5:{am:'OFF',pm:'OFF'}},
+  zakka:    {1:{am:'F2F',pm:'F2F'},2:{am:'VV',pm:'ET'}, 3:{am:'IW',pm:'F2F'}, 4:{am:'F2F',pm:'F2F'},5:{am:'IW',pm:'F2F'}},
+  fang:     {1:{am:'OFF',pm:'F2F'},2:{am:'F2F',pm:'ET'},3:{am:'F2F',pm:'F2F'},4:{am:'VV',pm:'F2F'}, 5:{am:'F2F',pm:'F2F'}},
+  saeedian: {1:{am:'F2F',pm:'F2F'},2:{am:'VV',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
+  nguyen:   {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'F2F'},3:{am:'F2F',pm:'F2F'},4:{am:'ET',pm:'VV'}, 5:{am:'F2F',pm:'F2F'}},
+  ozaki:    {1:{am:'OFF',pm:'F2F'},2:{am:'F2F',pm:'F2F'},3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'ET'},5:{am:'OFF',pm:'F2F'}},
+  pham:     {1:{am:'VV',pm:'OFF'}, 2:{am:'F2F',pm:'OFF'},3:{am:'IW',pm:'F2F'}, 4:{am:'F2F',pm:'ET'},5:{am:'F2F',pm:'F2F'}},
+  moghtader:{1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'F2F'},3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'ET'},5:{am:'F2F',pm:'F2F'}},
+  chen:     {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'},3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'VV'}, 5:{am:'F2F',pm:'VV'}},
+  kimm:     {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'},3:{am:'VV',pm:'OFF'},  4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'OFF'}},
+  bazargan: {1:{am:'AT',pm:'VV'},  2:{am:'F2F',pm:'AT'},3:{am:'AT',pm:'AT'},   4:{am:'F2F',pm:'AT'},5:{am:'F2F',pm:'AT'}},
+  green:    {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'},3:{am:'OFF',pm:'F2F'}, 4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'OFF'}},
+  hartmans: {1:{am:'OFF',pm:'OFF'},2:{am:'F2F',pm:'F2F'},3:{am:'OFF',pm:'OFF'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
+};
+
+const ALL_NPS = [
+  {id:'jimenez',  name:'Jimenez, I',  capTracked:true},
+  {id:'elevado',  name:'Elevado, G',  capTracked:true},
+  {id:'keough',   name:'Keough, P',   capTracked:true},
+  {id:'tan',      name:'Tan, A',      capTracked:true},
+  {id:'egan',     name:'Egan, T',     capTracked:false},
+  {id:'hanson',   name:'Hanson, K',   capTracked:false},
+  {id:'momeni',   name:'Momeni, N',   capTracked:false},
+  {id:'silvernail',name:'Silvernail, H',capTracked:false},
+  {id:'moh',      name:'Moh, W',      capTracked:false},
+];
+
+const SPECIAL_ROOMS = {
+  19:{label:'Room 19',tag:'Mark / Eskedar',type:'admin'},
+  20:{label:'Room 20',tag:'Isolation',type:'special-room'},
+  27:{label:'Room 27',tag:'Travel',type:'special-room'},
+};
+const OBESITY_ROOMS = {L:'Garcia (Obesity)',Q:'Garcia (Obesity)'};
+const BARI_ROOMS    = {1:'Newland/Dewar',2:'Newland/Dewar'};
+const AVAILABLE = {
+  venice:{
+    1:{AM:[15,16,20],PM:[17,18,20]},
+    2:{AM:[20,27],PM:[]},
+    3:{AM:[7,8,20,27],PM:[20,27]},
+    4:{AM:[20,27],PM:[15,16,17,18,21,22,23,24]},
+    5:{AM:[7,8,20,27],PM:[1,4,23,24]},
+  }
+};
+
+// Cap codes — VV explicitly excluded
+const CAP_CODES = new Set(['VAC','EL','LOA']);
+
+function normalizeCode(val) {
+  if(!val) return null;
+  const v = String(val).trim().toUpperCase();
+  if(v.startsWith('VAC')||v==='V') return 'VAC';
+  if(v.startsWith('EL')||v==='ED LEAVE'||v.includes('EDUCATION LEAVE')) return 'EL';
+  if(v.startsWith('LOA')) return 'LOA';
+  if(v==='OUT') return 'OUT';
+  if(v==='VV'||v==='VIRTUAL') return 'VV';
+  if(v.includes('SICK')||v==='SL') return 'SL';
+  return null;
+}
+
+// Name → ID matching for cross-tab integration
+const NAME_ID_MAP = {};
+[...FT_ALL,
+ {id:'dao',name:'Dao'},{id:'lagos',name:'Lagos'},
+ ...ALL_NPS
+].forEach(p=>{
+  NAME_ID_MAP[p.name.toLowerCase()] = p.id;
+  if(p.fullName) NAME_ID_MAP[p.fullName.toLowerCase()] = p.id;
+});
+function nameToId(name) {
+  if(!name) return null;
+  const n = name.toLowerCase().trim();
+  if(NAME_ID_MAP[n]) return NAME_ID_MAP[n];
+  for(const [k,v] of Object.entries(NAME_ID_MAP)) {
+    const parts = k.split(/[,\s]+/).filter(Boolean);
+    if(parts.some(p=>n.includes(p)&&p.length>3)) return v;
+  }
+  return null;
+}
+function isHWPhysician(name) {
+  const n = name.toLowerCase();
+  for(const [grp,info] of Object.entries(HOLIDAY_WHEEL)) {
+    if(info.physicians.some(p=>n.includes(p)||p.includes(n.split(' ').slice(-1)[0])))
+      return {group:grp,holiday:info.name};
+  }
+  return null;
+}
+
+// ─── TAB SWITCHING ───────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-bar-btn').forEach((b,i)=>
+    b.classList.toggle('active',['vt','ra','np'][i]===tab));
+  document.getElementById(`page-${tab}`).classList.add('active');
+  if(tab==='ra') RA_render();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// VACATION TRACKER (VT_)
+// ══════════════════════════════════════════════════════════════════════════════
+let VT_loadedFiles = [];
+let VT_providerData = [];
+
+// Drag & drop
+const VT_dropZone = document.getElementById('VT_dropZone');
+VT_dropZone.addEventListener('dragover',e=>{e.preventDefault();VT_dropZone.classList.add('dragover');});
+VT_dropZone.addEventListener('dragleave',()=>VT_dropZone.classList.remove('dragover'));
+VT_dropZone.addEventListener('drop',e=>{e.preventDefault();VT_dropZone.classList.remove('dragover');VT_handleFiles([...e.dataTransfer.files]);});
+document.getElementById('VT_fileInput').addEventListener('change',e=>VT_handleFiles([...e.target.files]));
+
+function VT_handleFiles(files) {
+  files.forEach(f=>{if(!VT_loadedFiles.find(x=>x.name===f.name))VT_loadedFiles.push(f);});
+  VT_renderFileList();
+  document.getElementById('VT_processBtn').disabled = VT_loadedFiles.length===0;
+  document.getElementById('VT_clearBtn').style.display = VT_loadedFiles.length?'inline-block':'none';
+}
+function VT_renderFileList() {
+  document.getElementById('VT_fileList').innerHTML = VT_loadedFiles.map((f,i)=>`
+    <div class="file-chip">📄 ${f.name}<span class="remove" onclick="VT_removeFile(${i})">✕</span></div>`).join('');
+}
+function VT_removeFile(i) {
+  VT_loadedFiles.splice(i,1);VT_renderFileList();
+  document.getElementById('VT_processBtn').disabled=VT_loadedFiles.length===0;
+}
+function VT_clearAll() {
+  VT_loadedFiles=[];VT_providerData=[];
+  VT_renderFileList();
+  document.getElementById('VT_processBtn').disabled=true;
+  document.getElementById('VT_clearBtn').style.display='none';
+  document.getElementById('VT_statsRow').style.display='none';
+  document.getElementById('VT_resultsSection').style.display='none';
+  document.getElementById('VT_emptyState').style.display='block';
+}
+
+function VT_parseProviderFile(ab, filename) {
+  const wb = XLSX.read(ab,{type:'array',cellDates:true});
+  const sheetName = wb.SheetNames.find(n=>n.toLowerCase().includes('monthly')||n.toLowerCase().includes('clinic'))||wb.SheetNames[0];
+  const ws = wb.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:false});
+
+  let providerName = rows[1]&&rows[1][2]?String(rows[1][2]).trim():'';
+  if(!providerName){const m=filename.match(/^(Dr[_\s]\w+|\w+)/);providerName=m?m[0].replace(/_/g,' '):filename.split('.')[0];}
+
+  let month=null,year=null;
+  const rawDate = rows[1]&&rows[1][6];
+  if(rawDate){const d=new Date(rawDate);if(!isNaN(d)){month=d.getMonth()+1;year=d.getFullYear();}}
+  if(!month){month=new Date().getMonth()+1;year=new Date().getFullYear();}
+
+  const dayCodes={};
+  let i=0;
+  while(i<rows.length){
+    const row=rows[i];
+    if(!row){i++;continue;}
+    const colDay={};
+    if(!row[0]){
+      for(let c=1;c<=7;c++){const v=row[c];if(v!==null&&v!==''&&!isNaN(parseInt(v)))colDay[c]=parseInt(v);}
+    }
+    if(Object.keys(colDay).length>0){
+      for(let j=1;j<=4;j++){
+        if(i+j>=rows.length)break;
+        const sub=rows[i+j];if(!sub)break;
+        const label=sub[0]?String(sub[0]).trim().toUpperCase():'';
+        if(!['EAM','AM','PM','EVE'].includes(label))break;
+        Object.entries(colDay).forEach(([c,dayNum])=>{
+          const val=sub[parseInt(c)];
+          const code=normalizeCode(val);
+          if(code){if(!dayCodes[dayNum])dayCodes[dayNum]=new Set();dayCodes[dayNum].add(code);}
+        });
+      }
+      i+=5;
+    } else i++;
+  }
+  const outDays=new Set(Object.entries(dayCodes).filter(([,c])=>c.size>0).map(([d])=>parseInt(d)));
+  return {name:providerName,month,year,outDays,dayCodes};
+}
+
+async function VT_processFiles() {
+  VT_providerData=[];
+  const btn=document.getElementById('VT_processBtn');
+  btn.disabled=true;btn.textContent='⏳ Processing...';
+  for(const file of VT_loadedFiles){
+    try{const ab=await file.arrayBuffer();VT_providerData.push(VT_parseProviderFile(new Uint8Array(ab),file.name));}
+    catch(e){console.error('VT parse error:',file.name,e);}
+  }
+  btn.disabled=false;btn.textContent='⚡ Compile Schedule';
+  if(VT_providerData.length) VT_renderResults();
+}
+
+// Cross-tab: get absences from VT for a given date string
+function VT_getAbsencesForDate(dateStr) {
+  if(!VT_providerData.length) return new Set();
+  const d=new Date(dateStr+'T12:00:00');
+  const day=d.getDate(),month=d.getMonth()+1,year=d.getFullYear();
+  const out=new Set();
+  VT_providerData.forEach(p=>{
+    if(p.month===month&&p.year===year&&p.outDays.has(day)){
+      const id=nameToId(p.name);
+      if(id) out.add(id);
+    }
+  });
+  return out;
+}
+
+function VT_renderResults() {
+  const month=VT_providerData[0].month,year=VT_providerData[0].year;
+  const numDays=new Date(year,month,0).getDate();
+  const dowNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const monthName=new Date(year,month-1,1).toLocaleString('default',{month:'long'});
+
+  document.getElementById('VT_calTitle').textContent=`${monthName} ${year} — ${VT_providerData.length} Provider${VT_providerData.length!==1?'s':''} Loaded`;
+
+  const dayData={};
+  for(let d=1;d<=numDays;d++){
+    const dk=dateKey(new Date(year,month-1,d));
+    const dow=new Date(year,month-1,d).getDay();
+    const isWeekend=dow===0||dow===6;
+    const hwInfo=HW_DATES[dk];
+    // Only count CAP_CODES for cap
+    const capProviders=VT_providerData.filter(p=>{
+      const codes=p.dayCodes[d];
+      return codes&&[...codes].some(c=>CAP_CODES.has(c));
+    });
+    const outProviders=VT_providerData.filter(p=>p.outDays.has(d));
+    dayData[d]={dk,dow,isWeekend,hwInfo,outProviders,capProviders,count:capProviders.length};
+  }
+
+  let statOk=0,statWarn=0,statFlag=0,statHw=0;
+  Object.values(dayData).forEach(dd=>{
+    if(dd.hwInfo){statHw++;return;}
+    if(dd.isWeekend)return;
+    if(dd.count>=5)statFlag++;else if(dd.count===4)statWarn++;else statOk++;
+  });
+  document.getElementById('VT_statProviders').textContent=VT_providerData.length;
+  document.getElementById('VT_statOk').textContent=statOk;
+  document.getElementById('VT_statWarn').textContent=statWarn;
+  document.getElementById('VT_statFlag').textContent=statFlag;
+  document.getElementById('VT_statHw').textContent=statHw;
+
+  const head=document.getElementById('VT_calHead');
+  const body=document.getElementById('VT_calBody');
+  const provCols=VT_providerData.map(p=>`<th class="provider-col">${p.name.split(/[,\s]+/)[0]}</th>`).join('');
+  head.innerHTML=`<tr><th class="date-col">Date</th><th>Day</th>${provCols}<th class="count-col">#</th></tr>`;
+  body.innerHTML='';
+  for(let d=1;d<=numDays;d++){
+    const dd=dayData[d];
+    let rowClass='';
+    if(dd.hwInfo)rowClass='holiday-wheel';
+    else if(dd.isWeekend)rowClass='weekend';
+    else if(dd.count>=5)rowClass='flagged';
+    else if(dd.count===4)rowClass='at-limit';
+
+    const provCells=VT_providerData.map(p=>{
+      const codes=p.dayCodes[d];
+      if(codes&&codes.size>0){
+        // Show first meaningful code
+        const c=[...codes].find(x=>x!=='SL')||[...codes][0];
+        const pillClass=c==='VV'?'VV':c;
+        return `<td><span class="code-pill ${pillClass}">${c}</span></td>`;
+      }
+      if(dd.hwInfo)return `<td><span class="code-pill hw">HW</span></td>`;
+      return '<td></td>';
+    }).join('');
+
+    let countHtml='';
+    if(dd.count>0&&!dd.isWeekend){
+      const cls=dd.hwInfo?'hw':dd.count>=5?'flag':dd.count>=4?'warn':'ok';
+      countHtml=`<span class="count-bubble ${cls}">${dd.count}</span>`;
+    }
+    const tr=document.createElement('tr');
+    if(rowClass)tr.className=rowClass;
+    tr.innerHTML=`<td class="date-col">${String(month).padStart(2,'0')}/${String(d).padStart(2,'0')}</td>
+      <td class="dow-col">${dowNames[dd.dow]}</td>${provCells}<td>${countHtml}</td>`;
+    body.appendChild(tr);
+  }
+
+  // Sidebar
+  const flags=Object.entries(dayData).filter(([,dd])=>!dd.hwInfo&&!dd.isWeekend&&dd.count>=4).sort((a,b)=>a[0]-b[0]);
+  const flagList=document.getElementById('VT_flagList');
+  flagList.innerHTML=flags.length===0
+    ?`<div class="alert-item" style="color:var(--teal);font-size:12px;padding:14px 18px;">✅ No flags this month</div>`
+    :flags.map(([d,dd])=>`<div class="alert-item">
+        <div class="alert-date" style="color:${dd.count>=5?'var(--red)':'var(--amber)'}">
+          ${dd.count>=5?'🔴':'🟡'} ${monthName} ${d} — ${dd.count} out
+        </div>
+        <div class="alert-who">${dd.capProviders.map(p=>p.name.split(/[,\s]+/)[0]).join(', ')}</div>
+      </div>`).join('');
+
+  const hwDays=Object.entries(dayData).filter(([,dd])=>dd.hwInfo&&dd.count>0);
+  const hwList=document.getElementById('VT_hwList');
+  hwList.innerHTML=hwDays.length===0
+    ?`<div class="hw-item"><div class="hw-text">No holiday wheel days this month</div></div>`
+    :hwDays.map(([d,dd])=>`<div class="hw-item"><div class="hw-dot"></div>
+        <div class="hw-text">${monthName} ${d} — ${dd.hwInfo[0].name} (Grp ${dd.hwInfo[0].group})</div>
+      </div>`).join('');
+
+  document.getElementById('VT_providerList').innerHTML=VT_providerData.map(p=>{
+    const total=p.outDays.size;
+    const codes={};
+    Object.values(p.dayCodes).forEach(s=>s.forEach(c=>{codes[c]=(codes[c]||0)+1;}));
+    const breakdown=Object.entries(codes).map(([c,n])=>`${c}:${n}`).join(' ');
+    return `<div class="provider-row">
+      <div class="provider-name">${p.name}</div>
+      <div class="provider-count">${total}d${breakdown?' · '+breakdown:''}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('VT_statsRow').style.display='grid';
+  document.getElementById('VT_resultsSection').style.display='block';
+  document.getElementById('VT_emptyState').style.display='none';
+}
+
+function VT_exportCSV() {
+  if(!VT_providerData.length)return;
+  const month=VT_providerData[0].month,year=VT_providerData[0].year;
+  const numDays=new Date(year,month,0).getDate();
+  const dowNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const rows=[['Date','Day',...VT_providerData.map(p=>p.name),'Total Out (capped)','Status']];
+  for(let d=1;d<=numDays;d++){
+    const dow=new Date(year,month-1,d).getDay();
+    const codes=VT_providerData.map(p=>{const c=p.dayCodes[d];return c&&c.size>0?[...c].join('+'):''});
+    const cnt=VT_providerData.filter(p=>{const c=p.dayCodes[d];return c&&[...c].some(x=>CAP_CODES.has(x));}).length;
+    const status=cnt>=5?'FLAGGED':cnt===4?'AT LIMIT':cnt>0?'OK':'';
+    rows.push([`${month}/${d}`,dowNames[dow],...codes,cnt||'',status]);
+  }
+  const csv=rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=`VeniceSchedule_${year}_${String(month).padStart(2,'0')}.csv`;
+  a.click();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ROOM ASSIGNMENT (RA_)
+// ══════════════════════════════════════════════════════════════════════════════
+let RA_absent = new Set();
+let RA_scenarioAbsent = new Set();
+let RA_session = 'AM';
+let RA_currentView = 'daily';
+let RA_heatmapYear = new Date().getFullYear();
+let RA_heatmapMonth = new Date().getMonth()+1;
+
+function RA_init() {
+  const today=new Date();
+  document.getElementById('RA_dateInput').value=today.toISOString().split('T')[0];
+  document.getElementById('headerBadge').textContent=
+    today.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  RA_buildLegend();
+  RA_buildScenarioSelect();
+  RA_render();
+}
+
+function RA_onDateChange() {
+  const d=new Date(document.getElementById('RA_dateInput').value+'T12:00:00');
+  // Auto-pull VT absences for this date
+  const vtAbsent=VT_getAbsencesForDate(document.getElementById('RA_dateInput').value);
+  if(vtAbsent.size>0) {
+    vtAbsent.forEach(id=>{
+      RA_absent.add(id);
+      document.getElementById(`RA_chip-${id}`)?.classList.add('toggled-off');
+    });
+  }
+  RA_render();
+}
+
+function RA_setSession(s,btn) {
+  RA_session=s;
+  document.querySelectorAll('.sess-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  RA_render();
+}
+
+function RA_getDow() {
+  const val=document.getElementById('RA_dateInput').value;
+  if(!val)return new Date().getDay();
+  return new Date(val+'T12:00:00').getDay();
+}
+
+function RA_buildLegend() {
+  const lg=document.getElementById('RA_providerLegend');
+  const all=[
+    ...FT_MAIN.map(p=>({...p,type:'ft'})),
+    ...FT_MOD150.map(p=>({...p,type:'ft'})),
+    {id:'dao',name:'Dao',type:'float'},{id:'lagos',name:'Lagos',type:'float'},
+    ...ALL_NPS.filter(p=>p.capTracked).map(p=>({...p,type:'np'})),
+  ];
+  let html='',lastType='';
+  all.forEach(p=>{
+    if(lastType&&p.type!==lastType)html+='<div class="legend-sep"></div>';
+    html+=`<div class="legend-chip ${p.type}" id="RA_chip-${p.id}" onclick="RA_toggleAbsent('${p.id}')">${p.name}</div>`;
+    lastType=p.type;
+  });
+  lg.innerHTML=html;
+}
+
+function RA_toggleAbsent(id) {
+  if(RA_absent.has(id))RA_absent.delete(id);else RA_absent.add(id);
+  document.getElementById(`RA_chip-${id}`)?.classList.toggle('toggled-off');
+  RA_render();
+}
+
+function RA_resetAbsent() {
+  RA_absent.clear();
+  document.querySelectorAll('.legend-chip').forEach(c=>c.classList.remove('toggled-off'));
+  RA_render();
+}
+
+function RA_render() {
+  RA_renderModules('RA_modulesWrap',RA_absent);
+  if(RA_currentView==='scenario') RA_renderModules('RA_scenarioWrap',new Set([...RA_absent,...RA_scenarioAbsent]));
+  if(RA_currentView==='month') RA_renderHeatmap();
+  const n=RA_absent.size;
+  document.getElementById('RA_statusMsg').textContent=n>0?`${n} provider${n>1?'s':''} marked absent`:'';
+}
+
+function RA_getShift(id,dow) {
+  const s=WEEKLY_SHIFTS[id];
+  if(!s||!s[dow])return '';
+  const k=RA_session==='AM'?'am':'pm';
+  return s[dow][k]||'';
+}
+
+function RA_getFloatInRoom(roomNum,dow,absentSet) {
+  for(const[fid,fdata]of Object.entries(FLOAT_SCHEDULE)){
+    if(absentSet.has(fid))continue;
+    const ds=fdata.schedule[dow];if(!ds)continue;
+    const ss=ds[RA_session];
+    if(ss&&ss.rooms&&ss.rooms.includes(roomNum))return fdata.name;
+  }
+  return null;
+}
+
+function RA_renderFTRoom(r, absentSet, dow) {
+  const provider=FT_MAIN.find(p=>p.rooms&&p.rooms.includes(r));
+  if(!provider)return `<div class="room-card"><div class="room-num">Rm ${r}</div></div>`;
+  const isOut=absentSet.has(provider.id);
+  const floatUsing=RA_getFloatInRoom(r,dow,absentSet);
+  const shift=RA_getShift(provider.id,dow);
+  // If provider is doing VV, their home room is effectively free
+  const isVV=shift==='VV';
+  let provTag='';
+  if(isOut){
+    provTag=`<div class="provider-tag out">✗ ${provider.name}</div>`;
+    if(floatUsing)provTag+=`<div class="provider-tag float" style="margin-top:2px;font-size:11px;">↪ ${floatUsing}</div>`;
+  } else if(isVV) {
+    provTag=`<div class="provider-tag vv-tag">📱 ${provider.name}</div><div class="session-code">VV (room free)</div>`;
+    if(floatUsing)provTag+=`<div class="provider-tag float" style="margin-top:2px;font-size:11px;">↪ ${floatUsing}</div>`;
+  } else {
+    provTag=`<div class="provider-tag ft">${provider.name}</div>`;
+    if(shift)provTag+=`<div class="session-code">${shift}</div>`;
+  }
+  return `<div class="room-card"><div class="room-num">Rm ${r}</div>${provTag}</div>`;
+}
+
+function RA_renderSpecialRoom(num) {
+  const info=SPECIAL_ROOMS[num];
+  if(!info)return '';
+  return `<div class="room-card special"><div class="room-num">Rm ${num}</div><div class="provider-tag ${info.type}">${info.tag}</div></div>`;
+}
+
+function RA_renderModules(containerId, absentSet) {
+  const wrap=document.getElementById(containerId);
+  const dow=RA_getDow();
+  if(dow===0||dow===6){
+    wrap.innerHTML=`<div style="background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:48px;text-align:center;color:var(--grey3);">
+      <div style="font-size:36px;margin-bottom:12px;">🏖</div>
+      <div style="font-family:'Instrument Serif',serif;font-size:20px;color:var(--navy);margin-bottom:6px;">Weekend</div>
+      <div style="font-size:13px;">No clinic scheduled. Select a weekday.</div></div>`;
+    return;
+  }
+
+  // Venice rows
+  const row1=[1,2,3,4,5,6,7,8].map(r=>RA_renderFTRoom(r,absentSet,dow)).join('');
+  const row2=[...([9,10,11,12,13,14,15,16,17,18].map(r=>RA_renderFTRoom(r,absentSet,dow))),RA_renderSpecialRoom(19)].join('');
+  const row3=[RA_renderSpecialRoom(20),...([21,22,23,24,25,26].map(r=>RA_renderFTRoom(r,absentSet,dow))),RA_renderSpecialRoom(27)].join('');
+
+  const veniceHTML=`<div class="module-section">
+    <div class="module-section-header venice"><span>VENICE MAIN CLINIC — Rooms 1–27</span></div>
+    <div class="rooms-grid" style="grid-template-columns:repeat(8,1fr)">${row1}</div>
+    <div class="rooms-grid" style="grid-template-columns:repeat(6,1fr)">${row2}</div>
+    <div class="rooms-grid" style="grid-template-columns:repeat(8,1fr)">${row3}</div>
+  </div>`;
+
+  // Float section
+  const dowName=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dow];
+  let floatCards='';
+  for(const[fid,fdata]of Object.entries(FLOAT_SCHEDULE)){
+    const isOut=absentSet.has(fid);
+    const ds=fdata.schedule[dow];
+    let sessRows='';
+    ['AM','PM','EVE'].forEach(s=>{
+      if(!ds)return;
+      const info=ds[s];
+      if(!info&&s==='EVE')return;
+      const rooms=info?.rooms?.length?info.rooms.join(', '):null;
+      const code=info?.code||'';
+      sessRows+=`<div class="float-row">
+        <span class="float-session">${s}</span>
+        ${rooms?`<span class="float-rooms">Rm ${rooms}</span>`:''}
+        ${code?`<span class="float-code">${code}</span>`:''}
+        ${!rooms&&!code?`<span class="float-code">—</span>`:''}
+      </div>`;
+    });
+    const hs=ds?.[RA_session];
+    const assigned=hs?.rooms?.length?`Rooms ${hs.rooms.join(' & ')} this ${RA_session}`:(hs?.code||'No rooms this session');
+    floatCards+=`<div class="float-doctor">
+      <div class="float-name" style="${isOut?'text-decoration:line-through;opacity:.5':''}">
+        <span style="width:8px;height:8px;border-radius:50%;background:var(--teal);display:inline-block"></span>
+        ${fdata.name}${isOut?' <span style="color:var(--red);font-size:11px;">(ABSENT)</span>':''}
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;font-family:'DM Mono',monospace;">${isOut?'—':assigned}</div>
+      <div class="float-schedule">${sessRows}</div>
+    </div>`;
+  }
+  const floatHTML=`<div class="float-section"><div class="float-header">FLOAT PHYSICIANS — ${dowName} Fixed Room Patterns</div>
+    <div class="float-grid">${floatCards}</div></div>`;
+
+  // MOD 150
+  const mod150Cards=FT_MOD150.map(p=>{
+    const isOut=absentSet.has(p.id);
+    const shift=RA_getShift(p.id,dow);
+    return p.rooms.map(r=>`<div class="room-card">
+      <div class="room-num">Rm ${r}</div>
+      <div class="provider-tag ${isOut?'out':'ft'}">${isOut?'✗ ':''}${p.name}</div>
+      ${shift?`<div class="session-code">${shift}</div>`:''}
+    </div>`).join('');
+  }).join('');
+  const obesityCards=Object.entries(OBESITY_ROOMS).map(([r,name])=>`<div class="room-card">
+    <div class="room-num">Rm ${r}</div>
+    <div class="provider-tag ft">${name}</div>
+    <div class="session-code">Obesity Med</div>
+  </div>`).join('');
+  const bariCards=Object.entries(BARI_ROOMS).map(([r,name])=>`<div class="room-card">
+    <div class="room-num">Rm ${r}</div>
+    <div class="provider-tag ft">${name}</div>
+    <div class="session-code">Bariatrics</div>
+  </div>`).join('');
+
+  const mod150HTML=`<div class="module-section" style="margin-top:20px">
+    <div class="module-section-header mod150"><span>MOD 150 — APC (M,N,O,P,R,S) &amp; Obesity Med (L,Q)</span></div>
+    <div class="rooms-grid" style="grid-template-columns:repeat(4,1fr)">${mod150Cards}${obesityCards}</div>
+  </div>
+  <div class="module-section" style="margin-top:20px">
+    <div class="module-section-header bariatrics"><span>MOD 150 — BARIATRICS (Rooms 1, 2)</span></div>
+    <div class="rooms-grid" style="grid-template-columns:repeat(2,1fr)">${bariCards}</div>
+  </div>`;
+
+  // Available rooms
+  const avail=AVAILABLE.venice[dow];
+  let availHTML='';
+  if(avail){
+    const rooms=(avail[RA_session]||[]);
+    if(rooms.length){
+      availHTML=`<div class="avail-section">
+        <div class="avail-title">Available / Open Rooms — ${dowName} ${RA_session}</div>
+        <div class="avail-chips">${rooms.map(r=>`<div class="avail-chip">Rm ${r}</div>`).join('')}</div>
+      </div>`;
+    }
+  }
+
+  wrap.innerHTML=veniceHTML+floatHTML+mod150HTML+availHTML;
+}
+
+// ── Month Heatmap ─────────────────────────────────────────────────────────────
+function RA_renderHeatmap() {
+  const y=RA_heatmapYear,m=RA_heatmapMonth;
+  const monthName=new Date(y,m-1,1).toLocaleString('default',{month:'long'});
+  document.getElementById('RA_heatmapTitle').textContent=`Room Assignment — ${monthName} ${y}`;
+  const numDays=new Date(y,m,0).getDate();
+  const firstDow=new Date(y,m-1,1).getDay();
+  const today=dateKey(new Date());
+  const dowNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  let html=`<div class="heatmap-dow-row">${dowNames.map(d=>`<div class="heatmap-dow-cell">${d}</div>`).join('')}</div>`;
+
+  // Build weeks
+  let cells=[];
+  for(let i=0;i<firstDow;i++)cells.push(null);
+  for(let d=1;d<=numDays;d++)cells.push(d);
+  while(cells.length%7!==0)cells.push(null);
+
+  for(let w=0;w<cells.length/7;w++){
+    html+='<div class="heatmap-week">';
+    for(let i=0;i<7;i++){
+      const d=cells[w*7+i];
+      if(!d){html+='<div class="heatmap-day empty"></div>';continue;}
+      const dk=dateKey(new Date(y,m-1,d));
+      const dow=new Date(y,m-1,d).getDay();
+      const isWeekend=dow===0||dow===6;
+      const hwInfo=HW_DATES[dk];
+      const isToday=dk===today;
+
+      // Get VT absent count for this day
+      const vtAbsent=VT_getAbsencesForDate(dk);
+      const count=vtAbsent.size;
+
+      let cls='heatmap-day';
+      if(isWeekend)cls+=' weekend';
+      else if(hwInfo)cls+=' hw';
+      else if(count>=5)cls+=' flag';
+      else if(count===4)cls+=' warn';
+      else if(count>0)cls+=' ok';
+      if(isToday)cls+=' today';
+
+      const dayNumHtml=isToday?`<div class="heatmap-day-num"><span>${d}</span></div>`:`<div class="heatmap-day-num">${d}</div>`;
+      let absentInfo='';
+      if(!isWeekend&&count>0){
+        absentInfo=`<div class="heatmap-absent-count">${count} out</div>`;
+        const names=[...vtAbsent].map(id=>{const p=FT_ALL.find(x=>x.id===id);return p?p.name:id;}).slice(0,3);
+        if(names.length)absentInfo+=`<div class="heatmap-names">${names.join(', ')}</div>`;
+      }
+      if(hwInfo)absentInfo=`<div class="heatmap-absent-count">${hwInfo[0].name}</div>`;
+
+      html+=`<div class="${cls}">${dayNumHtml}${absentInfo}</div>`;
+    }
+    html+='</div>';
+  }
+
+  document.getElementById('RA_heatmapGrid').innerHTML=html;
+}
+function RA_heatmapPrev(){RA_heatmapMonth--;if(RA_heatmapMonth<1){RA_heatmapMonth=12;RA_heatmapYear--;}RA_renderHeatmap();}
+function RA_heatmapNext(){RA_heatmapMonth++;if(RA_heatmapMonth>12){RA_heatmapMonth=1;RA_heatmapYear++;}RA_renderHeatmap();}
+
+// ── View switching ────────────────────────────────────────────────────────────
+function RA_switchView(v,btn) {
+  RA_currentView=v;
+  document.querySelectorAll('.ra-tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('RA_dailyView').style.display=v==='daily'?'block':'none';
+  document.getElementById('RA_monthView').style.display=v==='month'?'block':'none';
+  document.getElementById('RA_scenarioView').style.display=v==='scenario'?'block':'none';
+  document.getElementById('RA_legendCard').style.display=v==='month'?'none':'block';
+  if(v==='month')RA_renderHeatmap();
+  if(v==='scenario')RA_renderModules('RA_scenarioWrap',new Set([...RA_absent,...RA_scenarioAbsent]));
+}
+
+function RA_buildScenarioSelect() {
+  const sel=document.getElementById('RA_scenarioProv');
+  const all=[...FT_ALL.map(p=>({id:p.id,name:p.name})),{id:'dao',name:'Dao'},{id:'lagos',name:'Lagos'},...ALL_NPS.map(p=>({id:p.id,name:p.name}))];
+  sel.innerHTML=`<option value="">— Select —</option>`+all.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+}
+function RA_addScenarioAbsent() {
+  const v=document.getElementById('RA_scenarioProv').value;
+  if(v){RA_scenarioAbsent.add(v);RA_renderModules('RA_scenarioWrap',new Set([...RA_absent,...RA_scenarioAbsent]));}
+}
+function RA_resetScenario() {
+  RA_scenarioAbsent.clear();
+  RA_renderModules('RA_scenarioWrap',new Set([...RA_absent,...RA_scenarioAbsent]));
+}
+
+function RA_exportCSV() {
+  const dow=RA_getDow();
+  const rows=[['Module','Room','Provider','Shift','Status']];
+  FT_MAIN.forEach(p=>p.rooms.forEach(r=>{
+    const shift=RA_getShift(p.id,dow);
+    rows.push(['Venice Main',`Rm ${r}`,p.name,shift,RA_absent.has(p.id)?'ABSENT':'Present']);
+  }));
+  FT_MOD150.forEach(p=>p.rooms.forEach(r=>{
+    const shift=RA_getShift(p.id,dow);
+    rows.push(['MOD 150',`Rm ${r}`,p.name,shift,RA_absent.has(p.id)?'ABSENT':'Present']);
+  }));
+  const csv=rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=`VeniceRooms_${document.getElementById('RA_dateInput').value}_${RA_session}.csv`;
+  a.click();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// NP/PA TRACKER (NP_)
+// ══════════════════════════════════════════════════════════════════════════════
+let NP_loadedFiles=[];
+let NP_providerData=[];
+let NP_manualEntries=[];
+
+const NP_dropZone=document.getElementById('NP_dropZone');
+NP_dropZone.addEventListener('dragover',e=>{e.preventDefault();NP_dropZone.classList.add('dragover');});
+NP_dropZone.addEventListener('dragleave',()=>NP_dropZone.classList.remove('dragover'));
+NP_dropZone.addEventListener('drop',e=>{e.preventDefault();NP_dropZone.classList.remove('dragover');NP_handleFiles([...e.dataTransfer.files]);});
+document.getElementById('NP_fileInput').addEventListener('change',e=>NP_handleFiles([...e.target.files]));
+
+function NP_handleFiles(files) {
+  files.forEach(f=>{if(!NP_loadedFiles.find(x=>x.name===f.name))NP_loadedFiles.push(f);});
+  NP_renderFileList();
+  document.getElementById('NP_processBtn').disabled=NP_loadedFiles.length===0;
+  document.getElementById('NP_clearBtn').style.display=NP_loadedFiles.length?'inline-block':'none';
+}
+function NP_renderFileList() {
+  document.getElementById('NP_fileList').innerHTML=NP_loadedFiles.map((f,i)=>`
+    <div class="file-chip">📄 ${f.name}<span class="remove" onclick="NP_removeFile(${i})">✕</span></div>`).join('');
+}
+function NP_removeFile(i){NP_loadedFiles.splice(i,1);NP_renderFileList();document.getElementById('NP_processBtn').disabled=NP_loadedFiles.length===0;}
+function NP_clearAll(){
+  NP_loadedFiles=[];NP_providerData=[];
+  NP_renderFileList();
+  document.getElementById('NP_processBtn').disabled=true;
+  document.getElementById('NP_clearBtn').style.display='none';
+  NP_render();
+}
+
+async function NP_processFiles() {
+  NP_providerData=[];
+  const btn=document.getElementById('NP_processBtn');
+  btn.disabled=true;btn.textContent='⏳ Processing...';
+  for(const file of NP_loadedFiles){
+    try{
+      const ab=await file.arrayBuffer();
+      // Reuse VT parser — same file format
+      const data=VT_parseProviderFile(new Uint8Array(ab),file.name);
+      // Match to known NPs
+      const matched=ALL_NPS.find(np=>{
+        const n=np.name.toLowerCase();
+        const dn=data.name.toLowerCase();
+        return n.includes(dn.split(/[,\s]+/).find(p=>p.length>3)||'')||dn.includes(n.split(/[,\s]+/).find(p=>p.length>3)||'');
+      });
+      if(matched){NP_providerData.push({...data,id:matched.id,capTracked:matched.capTracked});}
+      else{NP_providerData.push({...data,id:null,capTracked:false});}
+    }catch(e){console.error('NP parse error:',file.name,e);}
+  }
+  btn.disabled=false;btn.textContent='⚡ Compile NP Schedule';
+  NP_render();
+}
+
+function NP_addManual() {
+  const prov=document.getElementById('NP_manualProv').value;
+  const start=document.getElementById('NP_startDate').value;
+  const end=document.getElementById('NP_endDate').value;
+  if(!prov||!start)return;
+  const endDate=end||start;
+  NP_manualEntries.push({id:prov,start,end:endDate});
+  NP_render();
+}
+
+function NP_getAbsentsForDay(dayNum,month,year) {
+  const absent=new Set();
+  // From file data
+  NP_providerData.forEach(p=>{
+    if(p.capTracked&&p.month===month&&p.year===year&&p.outDays.has(dayNum)) absent.add(p.id);
+  });
+  // From manual entries
+  const dk=dateKey(new Date(year,month-1,dayNum));
+  NP_manualEntries.forEach(e=>{
+    if(dk>=e.start&&dk<=e.end){
+      const np=ALL_NPS.find(n=>n.id===e.id);
+      if(np&&np.capTracked)absent.add(e.id);
+    }
+  });
+  return absent;
+}
+
+function NP_render() {
+  const staffNPs=ALL_NPS.filter(p=>p.capTracked);
+  const grid=document.getElementById('NP_providerGrid');
+
+  // Determine current month from data or today
+  let month=new Date().getMonth()+1,year=new Date().getFullYear();
+  if(NP_providerData.length){month=NP_providerData[0].month;year=NP_providerData[0].year;}
+
+  // Count absent days per provider
+  const numDays=new Date(year,month,0).getDate();
+  const provCounts={};
+  staffNPs.forEach(p=>{provCounts[p.id]=0;});
+  for(let d=1;d<=numDays;d++){
+    const dow=new Date(year,month-1,d).getDay();
+    if(dow===0||dow===6)continue;
+    const abs=NP_getAbsentsForDay(d,month,year);
+    abs.forEach(id=>{if(provCounts[id]!==undefined)provCounts[id]++;});
+  }
+
+  grid.innerHTML=staffNPs.map(p=>{
+    const days=provCounts[p.id]||0;
+    const isAbsent=days>0;
+    return `<div class="np-prov-card${isAbsent?' absent-card':''}">
+      <div class="np-prov-name">${p.name}</div>
+      <div class="np-prov-sub">Staff NP/PA · Cap tracked</div>
+      <div style="font-size:12px;color:${isAbsent?'var(--red)':'var(--teal)'};">
+        ${days>0?`${days} day${days!==1?'s':''} out this month`:'No absences loaded'}
+      </div>
+    </div>`;
+  }).join('');
+
+  const monthName=new Date(year,month-1,1).toLocaleString('default',{month:'long'});
+  document.getElementById('NP_monthBadge').textContent=`${monthName} ${year}`;
+
+  // Build calendar if data available
+  const hasData=NP_providerData.length>0||NP_manualEntries.length>0;
+  const calCard=document.getElementById('NP_calCard');
+  calCard.style.display=hasData?'block':'none';
+  if(hasData){
+    document.getElementById('NP_calTitle').textContent=`${monthName} ${year} — NP/PA Schedule`;
+    const head=document.getElementById('NP_calHead');
+    const body=document.getElementById('NP_calBody');
+    const provNames=staffNPs.map(p=>`<th>${p.name.split(',')[0]}</th>`).join('');
+    head.innerHTML=`<tr><th class="np-date">Date</th><th>Day</th>${provNames}<th>Cap</th></tr>`;
+    body.innerHTML='';
+    const dowNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const alerts=[];
+    for(let d=1;d<=numDays;d++){
+      const dow=new Date(year,month-1,d).getDay();
+      const isWeekend=dow===0||dow===6;
+      const abs=NP_getAbsentsForDay(d,month,year);
+      const capHit=abs.size>0;
+      const tr=document.createElement('tr');
+      if(isWeekend)tr.className='np-weekend';
+      else if(capHit)tr.className='np-cap-hit';
+      const cells=staffNPs.map(p=>{
+        const out=abs.has(p.id);
+        return `<td>${out?`<span class="code-pill VAC">OUT</span>`:''}</td>`;
+      }).join('');
+      const capBadge=isWeekend?'':capHit?`<span class="np-cap-badge cap">CAP</span>`:`<span class="np-cap-badge ok">${abs.size}/1</span>`;
+      tr.innerHTML=`<td class="np-date">${String(month).padStart(2,'0')}/${String(d).padStart(2,'0')}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:10px;color:var(--grey3)">${dowNames[dow]}</td>
+        ${cells}<td>${capBadge}</td>`;
+      body.appendChild(tr);
+      if(capHit&&!isWeekend){
+        alerts.push({d,month,monthName,who:[...abs].map(id=>ALL_NPS.find(n=>n.id===id)?.name||id)});
+      }
+    }
+
+    // Alert list
+    const alertList=document.getElementById('NP_alertList');
+    alertList.innerHTML=alerts.length===0
+      ?`<div class="np-alert-item" style="color:var(--teal);">✅ No cap violations this month</div>`
+      :alerts.map(a=>`<div class="np-alert-item">
+          <div style="font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--red);margin-bottom:2px;">
+            🔴 ${a.monthName} ${a.d}
+          </div>
+          <div style="font-size:12px;color:var(--text2);">${a.who.join(', ')}</div>
+        </div>`).join('');
+  }
+
+  // Manual entries list
+  const manualList=document.getElementById('NP_manualList');
+  if(NP_manualEntries.length===0){
+    manualList.innerHTML=`<div class="np-alert-item" style="color:var(--grey3);">None entered</div>`;
+  } else {
+    manualList.innerHTML=NP_manualEntries.map((e,i)=>{
+      const np=ALL_NPS.find(n=>n.id===e.id);
+      return `<div class="np-alert-item" style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-weight:600;font-size:12px;">${np?.name||e.id}</div>
+          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text2);">${e.start}${e.end!==e.start?' → '+e.end:''}</div>
+        </div>
+        <span onclick="NP_removeManual(${i})" style="cursor:pointer;color:var(--red);opacity:.6;font-size:14px;">✕</span>
+      </div>`;
+    }).join('');
+  }
+}
+
+function NP_removeManual(i){NP_manualEntries.splice(i,1);NP_render();}
+
+function NP_exportCSV() {
+  if(!NP_providerData.length&&!NP_manualEntries.length)return;
+  const month=NP_providerData.length?NP_providerData[0].month:new Date().getMonth()+1;
+  const year=NP_providerData.length?NP_providerData[0].year:new Date().getFullYear();
+  const numDays=new Date(year,month,0).getDate();
+  const staffNPs=ALL_NPS.filter(p=>p.capTracked);
+  const dowNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const rows=[['Date','Day',...staffNPs.map(p=>p.name),'Cap Status']];
+  for(let d=1;d<=numDays;d++){
+    const dow=new Date(year,month-1,d).getDay();
+    const abs=NP_getAbsentsForDay(d,month,year);
+    rows.push([`${month}/${d}`,dowNames[dow],...staffNPs.map(p=>abs.has(p.id)?'OUT':''),abs.size>0?'CAP HIT':'OK']);
+  }
+  const csv=rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=`VeniceNPPA_${year}_${String(month).padStart(2,'0')}.csv`;
+  a.click();
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+NP_render();
+RA_init();
+</script>
+</body>
+</html>

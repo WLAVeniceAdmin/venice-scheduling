@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Venice Clinic — Scheduling Tools</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy:#0f2540;--navy2:#1a3a5c;--blue:#1d6fa4;--blue-lt:#e8f3fb;
+  --teal:#0e8a7a;--teal-lt:#e3f5f3;--purple:#6b3fa0;--purple-lt:#f0eaf9;
+  --grey:#f4f6f8;--grey2:#e8ebee;--grey3:#b0b8c4;--text:#1a2535;--text2:#4a5568;
+  --radius:12px;--shadow:0 2px 16px rgba(15,37,64,.10);--shadow-lg:0 8px 40px rgba(15,37,64,.14);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:#f0f4f8;color:var(--text);min-height:100vh;display:flex;flex-direction:column;}
+
+/* ── HEADER ── */
+.header{background:var(--navy);padding:0 40px;height:68px;display:flex;align-items:center;
+  justify-content:space-between;box-shadow:0 2px 20px rgba(0,0,0,.22);}
+.logo{display:flex;align-items:center;gap:14px;}
+.logo-icon{width:36px;height:36px;background:var(--blue);border-radius:9px;
+  display:flex;align-items:center;justify-content:center;font-size:18px;}
+.logo-text{font-family:'Instrument Serif',serif;font-size:20px;color:white;letter-spacing:.01em;}
+.logo-sub{font-size:11px;color:rgba(255,255,255,.45);font-family:'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;}
+.header-tag{font-size:11px;color:rgba(255,255,255,.35);font-family:'DM Mono',monospace;letter-spacing:.06em;}
+
+/* ── HERO ── */
+.hero{background:linear-gradient(135deg,var(--navy) 0%,var(--navy2) 100%);padding:64px 40px 72px;text-align:center;}
+.hero-eyebrow{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+  color:rgba(255,255,255,.45);font-family:'DM Mono',monospace;margin-bottom:16px;}
+.hero h1{font-family:'Instrument Serif',serif;font-size:40px;color:white;line-height:1.18;
+  margin-bottom:14px;text-wrap:balance;}
+.hero-sub{font-size:15px;color:rgba(255,255,255,.6);max-width:480px;margin:0 auto;line-height:1.65;}
+
+/* ── CARDS ── */
+.cards{max-width:900px;margin:-36px auto 0;padding:0 40px 60px;display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+
+.tool-card{background:white;border-radius:var(--radius);box-shadow:var(--shadow-lg);
+  overflow:hidden;display:flex;flex-direction:column;transition:transform .2s,box-shadow .2s;}
+.tool-card:hover{transform:translateY(-3px);box-shadow:0 12px 48px rgba(15,37,64,.18);}
+
+.card-accent{height:5px;}
+.card-accent.blue{background:linear-gradient(90deg,var(--navy) 0%,var(--blue) 100%);}
+.card-accent.teal{background:linear-gradient(90deg,var(--teal) 0%,#1ab8a6 100%);}
+.card-accent.purple{background:linear-gradient(90deg,var(--purple) 0%,#9b6fca 100%);}
+
+.card-body{padding:28px 28px 24px;}
+.card-icon{font-size:32px;margin-bottom:14px;}
+.card-title{font-family:'Instrument Serif',serif;font-size:22px;color:var(--navy);margin-bottom:8px;}
+.card-desc{font-size:13.5px;color:var(--text2);line-height:1.65;margin-bottom:20px;}
+.card-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:24px;}
+.tag{padding:3px 10px;border-radius:20px;font-size:11px;font-family:'DM Mono',monospace;font-weight:500;}
+.tag.blue{background:var(--blue-lt);color:var(--blue);}
+.tag.teal{background:var(--teal-lt);color:var(--teal);}
+.tag.purple{background:var(--purple-lt);color:var(--purple);}
+
+.card-btn{display:block;text-align:center;padding:12px 0;border-radius:8px;font-size:14px;
+  font-weight:600;font-family:'DM Sans',sans-serif;text-decoration:none;transition:all .18s;}
+.card-btn.blue{background:var(--navy);color:white;}
+.card-btn.blue:hover{background:var(--navy2);}
+.card-btn.teal{background:var(--teal);color:white;}
+.card-btn.teal:hover{background:#0c7a6c;}
+.card-btn.purple{background:var(--purple);color:white;}
+.card-btn.purple:hover{background:#5c349a;}
+
+/* Wide unified card */
+.cards-wide{max-width:900px;margin:0 auto;padding:0 40px 16px;}
+.tool-card-wide{background:white;border-radius:var(--radius);box-shadow:var(--shadow-lg);
+  overflow:hidden;display:flex;flex-direction:column;transition:transform .2s,box-shadow .2s;margin-bottom:20px;}
+.tool-card-wide:hover{transform:translateY(-3px);box-shadow:0 12px 48px rgba(15,37,64,.18);}
+.card-wide-inner{display:flex;align-items:center;gap:28px;padding:28px 32px;}
+.card-wide-icon{font-size:40px;flex-shrink:0;}
+.card-wide-text{flex:1;}
+.card-wide-title{font-family:'Instrument Serif',serif;font-size:24px;color:var(--navy);margin-bottom:6px;}
+.card-wide-desc{font-size:13.5px;color:var(--text2);line-height:1.65;margin-bottom:14px;}
+.card-wide-btn{display:inline-block;padding:11px 28px;border-radius:8px;font-size:14px;
+  font-weight:600;font-family:'DM Sans',sans-serif;text-decoration:none;transition:all .18s;
+  background:var(--navy);color:white;}
+.card-wide-btn:hover{background:var(--navy2);}
+
+/* ── INFO SECTION ── */
+.info{max-width:900px;margin:0 auto;padding:0 40px 60px;display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.info-card{background:white;border-radius:10px;box-shadow:var(--shadow);padding:20px 24px;}
+.info-title{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--text2);font-family:'DM Mono',monospace;margin-bottom:10px;}
+.info-list{list-style:none;display:flex;flex-direction:column;gap:6px;}
+.info-list li{font-size:13px;color:var(--text2);display:flex;align-items:flex-start;gap:8px;line-height:1.5;}
+.info-list li::before{content:'·';color:var(--grey3);flex-shrink:0;margin-top:1px;}
+
+/* ── FOOTER ── */
+.footer{margin-top:auto;background:var(--navy);padding:18px 40px;text-align:center;
+  font-size:11px;color:rgba(255,255,255,.3);font-family:'DM Mono',monospace;letter-spacing:.05em;}
+
+@media(max-width:700px){
+  .cards,.info{grid-template-columns:1fr;}
+  .hero{padding:48px 24px 64px;}
+  .hero h1{font-size:30px;}
+  .cards,.cards-wide,.info{padding-left:20px;padding-right:20px;}
+  .card-wide-inner{flex-direction:column;text-align:center;}
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="logo">
+    <div class="logo-icon">🏥</div>
+    <div>
+      <div class="logo-text">Venice Clinic</div>
+      <div class="logo-sub">Internal Medicine · Primary Care</div>
+    </div>
+  </div>
+  <div class="header-tag">Kaiser Permanente · Staff Tools</div>
+</header>
+
+<div class="hero">
+  <div class="hero-eyebrow">Physician Scheduling</div>
+  <h1>Venice Clinic<br>Scheduling Tools</h1>
+  <div class="hero-sub">Browser-based scheduling tools for the Venice admin team. No login required — open and use directly.</div>
+</div>
+
+<!-- Unified Suite (primary) -->
+<div class="cards-wide">
+  <div class="tool-card-wide">
+    <div class="card-accent blue"></div>
+    <div class="card-wide-inner">
+      <div class="card-wide-icon">📅</div>
+      <div class="card-wide-text">
+        <div class="card-wide-title">Venice Scheduling Suite <span style="font-size:12px;font-family:'DM Mono',monospace;color:var(--teal);vertical-align:middle;margin-left:6px;">RECOMMENDED</span></div>
+        <div class="card-wide-desc">All three tools in one — Vacation Tracker, Room Assignment, and NP/PA Tracker. Upload provider schedule files to compile the monthly calendar, flag coverage gaps, assign exam rooms, and track NP/PA capacity. VV (Virtual Visit) days correctly recognized and excluded from cap counts.</div>
+        <div class="card-tags">
+          <span class="tag blue">Vacation Tracker</span>
+          <span class="tag teal">Room Assignment</span>
+          <span class="tag purple">NP/PA Tracker</span>
+          <span class="tag blue">Holiday Wheel</span>
+          <span class="tag teal">Month Heatmap</span>
+          <span class="tag blue">CSV Export</span>
+        </div>
+        <a href="VeniceSchedulingSuite.html" class="card-wide-btn">Open Scheduling Suite →</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Info cards -->
+<div class="info">
+  <div class="info-card">
+    <div class="info-title">Absence Cap Rules</div>
+    <ul class="info-list">
+      <li>Max 4 physicians absent simultaneously (5+ = flag → Eskedar → Dr. Pham)</li>
+      <li>Codes that count: VAC, EL, LOA</li>
+      <li>Excluded: SL, OFF, ET, AT, IPS, IW, NC, VV (Virtual Visit)</li>
+      <li>Holiday wheel days shown in purple — pre-approved, no alert triggered</li>
+      <li>NP/PA cap: max 1 staff NP/PA out at a time — tracked separately</li>
+    </ul>
+  </div>
+  <div class="info-card">
+    <div class="info-title">How to Use</div>
+    <ul class="info-list">
+      <li>Open the Scheduling Suite (recommended) or an individual tool above</li>
+      <li>Drag and drop provider .xlsm schedule files onto the upload zone</li>
+      <li>Click Compile Schedule to generate the monthly calendar</li>
+      <li>Switch to Room Assignment tab — absences carry over automatically</li>
+      <li>Export to CSV or print directly from any view</li>
+    </ul>
+  </div>
+</div>
+
+<footer class="footer">
+  Venice Clinic · Staff Scheduling Tools · Staff scheduling only — no patient data · Internal use only
+</footer>
+
+</body>
+</html>

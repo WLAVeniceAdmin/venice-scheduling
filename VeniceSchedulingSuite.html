@@ -514,7 +514,7 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
   <div id="RA_dailyView">
     <div class="modules-wrap" id="RA_modulesWrap"></div>
     <div class="export-bar">
-      <button class="btn-secondary" onclick="VT_exportUnified()">⬇ Export Monthly Schedule</button>
+      <button class="btn-secondary" onclick="RA_exportDailySchedule()">⬇ Export Daily Schedule</button>
       <button class="btn-secondary" onclick="window.print()">🖨 Print</button>
     </div>
   </div>
@@ -1597,6 +1597,133 @@ function RA_resetScenario() {
   RA_renderModules('RA_scenarioWrap',new Set([...RA_allAbsent(),...RA_scenarioAbsent]));
 }
 
+
+function RA_exportDailySchedule() {
+  const dateStr = document.getElementById('RA_dateInput').value;
+  if (!dateStr) { alert('Please select a date first (Room Assignment tab).'); return; }
+
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const dateObj = new Date(dateStr + 'T12:00:00');
+  const dow = dateObj.getDay(); // 0=Sun,1=Mon,...,5=Fri,6=Sat
+  const isWeekend = dow === 0 || dow === 6;
+
+  const dowNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const ordinal = n => n + (['th','st','nd','rd'][n%10<4&&(n<11||n>13)?n%10:0]||'th');
+
+  // DOTD
+  const dotd = window._VT_dotdData;
+  let dotdAM = '', dotdPM = '';
+  if (!isWeekend && dotd && dotd.month===month && dotd.year===year && dotd.assignments[day]) {
+    dotdAM = dotd.assignments[day].am?.name || '';
+    dotdPM = dotd.assignments[day].pm?.name || '';
+  }
+
+  // Absence code for MD
+  function getMDCode(id) {
+    const pd = VT_providerData.find(p=>p.id===id);
+    if (!pd || pd.month!==month || pd.year!==year) return '';
+    const c = pd.dayCodes[day];
+    return c && c.size ? [...c].join('+') : '';
+  }
+  // Absence code for NP
+  function getNPCode(id) {
+    const pd = NP_providerData.find(p=>p.id===id);
+    if (!pd || pd.month!==month || pd.year!==year) return '';
+    const c = pd.dayCodes[day];
+    return c && c.size ? [...c].join('+') : '';
+  }
+  // AM/PM type for a working MD
+  function getType(id, session) {
+    if (isWeekend) return '';
+    const ws = WEEKLY_SHIFTS[id]?.[dow];
+    if (ws) return session==='AM' ? ws.am||'' : ws.pm||'';
+    const fs = FLOAT_SCHEDULE[id]?.schedule[dow];
+    if (fs) {
+      const slot = fs[session];
+      return slot?.code || (slot?.rooms?.length ? 'F2F' : '');
+    }
+    return '';
+  }
+  // Float rooms for a given day
+  function floatRooms(id) {
+    if (isWeekend) return '';
+    const fs = FLOAT_SCHEDULE[id]?.schedule[dow];
+    if (!fs) return '';
+    const all = [...new Set([...(fs.AM?.rooms||[]),...(fs.PM?.rooms||[])])].filter(Boolean);
+    return all.length ? all.join(' & ') : '';
+  }
+  // Build one physician row: [Room, Name, blank, AM, PM, blank x7]
+  function mdRow(rooms, id, fullName) {
+    const code = getMDCode(id);
+    const am = code || getType(id,'AM');
+    const pm = code || getType(id,'PM');
+    return [rooms, fullName, '', am, pm, '', '', '', '', '', '', ''];
+  }
+
+  const rows = [];
+
+  // ── HEADER ──
+  rows.push(['*** Schedule is subject to change according to the clinic\'s need and staff availability. ***','','','','','','Specimen Drop Off','MOD 150','','MOD 361','','MOD 362']);
+  rows.push(['','','','','','','AM','','','','','']);
+  rows.push([dowNames[dow],'',`${monthNames[month-1]} ${ordinal(day)}`,'','','In-Basket Coverage','PM','','','','','']);
+  const dotdLabel = (dotdAM||dotdPM) ? `AM: Dr. ${dotdAM}                    PM: Dr. ${dotdPM}` : '';
+  rows.push(['Incident Provider',dotdLabel,'','','SCREENING ROOMS: MOD 361 AND MOD 362 - RM 20','','COVERING NURSE/FLOAT','','','','','']);
+  rows.push(['','','','','','','','','','','','']);
+
+  // ── MODULE 361 ──
+  rows.push(['Exam Room','Module 361       Ext 3896','','AM','PM','In-Basket Coverage','Nursing Staff Schedule','Lunch','AM','PM','AM','PM']);
+  const mod361 = [
+    {id:'dao',      rooms:()=>floatRooms('dao')||'(float)',   fullName:'Dao, B'},
+    {id:'fang',     rooms:()=>'9 & 10',  fullName:'Fang, K'},
+    {id:'lagos',    rooms:()=>floatRooms('lagos')||'(float)', fullName:'Lagos, Y'},
+    {id:'morales',  rooms:()=>'2 & 3',   fullName:'Morales, G'},
+    {id:'nudell',   rooms:()=>'5 & 6',   fullName:'Nudell, J'},
+    {id:'saeedian', rooms:()=>'11 & 12', fullName:'Saeedian, J'},
+    {id:'siegel',   rooms:()=>'1 & 4',   fullName:'Siegel, J'},
+    {id:'zakka',    rooms:()=>'7 & 8',   fullName:'Zakka, K'},
+  ];
+  mod361.forEach(p => rows.push(mdRow(p.rooms(), p.id, p.fullName)));
+  rows.push(['','','','','','','','','','','','']);
+
+  // ── MODULE 362 ──
+  rows.push(['Exam Room','Module 362       Ext 2441 & 3898','','AM','PM','In-Basket Coverage','Nursing Staff Schedule','Lunch','AM','PM','AM','PM']);
+  const mod362 = [
+    {id:'chen',      rooms:'23 & 24', fullName:'Chen, A'},
+    {id:'kimm',      rooms:'25 & 26', fullName:'Kimm, S'},
+    {id:'moghtader', rooms:'21 & 22', fullName:'Moghtader, S'},
+    {id:'nguyen',    rooms:'13 & 14', fullName:'Nguyen, L'},
+    {id:'ozaki',     rooms:'15 & 16', fullName:'Ozaki, R'},
+    {id:'pham',      rooms:'17 & 18', fullName:'Pham, A'},
+  ];
+  mod362.forEach(p => rows.push(mdRow(p.rooms, p.id, p.fullName)));
+  rows.push(['','','','','','','','','','','','']);
+
+  // ── MODULE 150 - APC ──
+  rows.push(['Exam Room','Module 150 --- APC   EXT: 6744','','AM','PM','In-Basket Coverage','Nursing Staff Schedule','Lunch','AM','PM','Other Assignment','']);
+  const mod150 = [
+    {id:'bazargan', rooms:'M & N', fullName:'Bazargan-Lari'},
+    {id:'green',    rooms:'O & P', fullName:'Green, D'},
+    {id:'hartmans', rooms:'R & S', fullName:'Hartmans, S'},
+  ];
+  mod150.forEach(p => rows.push(mdRow(p.rooms, p.id, p.fullName)));
+  rows.push(['','','','','','','','','','','','']);
+
+  // ── NP/PA SECTION ──
+  rows.push(['','Module 360','','AM','PM','In-Basket Coverage','','','','','Other Assignment','']);
+  ALL_NPS.forEach(p => {
+    const code = getNPCode(p.id);
+    rows.push(['', p.name, '', code||'', '', '', '', '', '', '', '', '']);
+  });
+  rows.push(['','','','','','','','','','','','']);
+  rows.push([`Generated by Venice Scheduling Suite · ${new Date().toLocaleDateString()}`, '', '', '', '', '', '', '', '', '', '', '']);
+
+  const csv = rows.map(r => r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = `VeniceSchedule_${dateStr}.csv`;
+  a.click();
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // NP/PA TRACKER (NP_)

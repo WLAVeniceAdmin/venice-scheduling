@@ -743,6 +743,7 @@ function FB_serializeDotd(d) {
   if (!d) return null;
   const assignments = {};
   Object.entries(d.assignments||{}).forEach(([day, asn]) => {
+    if (!asn) { assignments[day] = null; return; }
     assignments[day] = {
       am: asn.am ? {id:asn.am.id, name:asn.am.name} : null,
       pm: asn.pm ? {id:asn.pm.id, name:asn.pm.name} : null,

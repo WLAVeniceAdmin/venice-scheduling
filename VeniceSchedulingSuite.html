@@ -767,7 +767,7 @@ async function FB_saveNow() {
       updatedBy:    name,
     });
     FB_setStatus('synced', `Saved just now by ${name}`);
-  } catch(e) { FB_setStatus('error', 'Save failed — check console'); console.error(e); }
+  } catch(e) { FB_setStatus('error', 'Save failed: ' + (e.code||e.message||e)); console.error('FB_saveNow error:', e); }
 }
 
 function FB_applySnapshot(d) {

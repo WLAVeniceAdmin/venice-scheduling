@@ -721,10 +721,15 @@ function FB_timeAgo(date) {
   return date.toLocaleDateString();
 }
 
+// Strip undefined values so Firestore doesn't reject the payload
+function FB_sanitize(v) {
+  return JSON.parse(JSON.stringify(v, (_, val) => val === undefined ? null : val));
+}
+
 // Serialize VT/NP provider data (Maps/Sets → plain objects)
 function FB_serializeProviders(arr) {
-  return arr.map(p => ({
-    id: p.id, name: p.name, month: p.month, year: p.year,
+  return arr.map(p => FB_sanitize({
+    name: p.name, month: p.month, year: p.year,
     dayCodes: Object.fromEntries(
       Object.entries(p.dayCodes).map(([d, s]) => [d, [...s]])
     )
@@ -759,14 +764,15 @@ async function FB_saveNow() {
   const name = localStorage.getItem('venice_admin_name') ||
     (()=>{ const n=prompt('Your name/initials (shown to other admins):',''); if(n) localStorage.setItem('venice_admin_name',n); return n||'Admin'; })();
   try {
-    await FB_db.doc(FB_DOC).set({
-      vtProviders:  FB_serializeProviders(VT_providerData),
-      npProviders:  FB_serializeProviders(NP_providerData),
-      dotdData:     FB_serializeDotd(window._VT_dotdData),
-      npManual:     NP_manualEntries||[],
-      lastUpdated:  firebase.firestore.FieldValue.serverTimestamp(),
-      updatedBy:    name,
+    const payload = FB_sanitize({
+      vtProviders: FB_serializeProviders(VT_providerData),
+      npProviders: FB_serializeProviders(NP_providerData),
+      dotdData:    FB_serializeDotd(window._VT_dotdData),
+      npManual:    NP_manualEntries||[],
+      updatedBy:   name,
     });
+    payload.lastUpdated = firebase.firestore.FieldValue.serverTimestamp();
+    await FB_db.doc(FB_DOC).set(payload);
     FB_setStatus('synced', `Saved just now by ${name}`);
   } catch(e) { FB_setStatus('error', 'Save failed: ' + (e.code||e.message||e)); console.error('FB_saveNow error:', e); }
 }

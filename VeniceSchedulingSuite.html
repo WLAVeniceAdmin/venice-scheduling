@@ -1013,8 +1013,20 @@ function VT_parseProviderFile(ab, filename) {
 
   let month=null,year=null;
   const rawDate = rows[1]&&rows[1][6];
-  if(rawDate){const d=new Date(rawDate);if(!isNaN(d)){month=d.getMonth()+1;year=d.getFullYear();}}
-  if(!month){month=new Date().getMonth()+1;year=new Date().getFullYear();}
+  if(rawDate){
+    const s=String(rawDate).trim();
+    // 1. Pull a 4-digit year directly — most reliable regardless of format
+    const yr4=s.match(/20(\d{2})/);
+    if(yr4) year=parseInt(yr4[0]);
+    // 2. Pull month from name ("November", "Nov") or number (M/D/YY or MM/YYYY)
+    const MON=['january','february','march','april','may','june','july','august','september','october','november','december'];
+    const sl=s.toLowerCase();
+    for(let mi=0;mi<MON.length;mi++){if(sl.includes(MON[mi].slice(0,3))){month=mi+1;break;}}
+    if(!month){const mNum=s.match(/^(\d{1,2})\D/);if(mNum)month=parseInt(mNum[1]);}
+    // 3. If still no year, try native Date as fallback
+    if(!year){const d=new Date(s);if(!isNaN(d)&&d.getFullYear()>2020){month=month||d.getMonth()+1;year=d.getFullYear();}}
+  }
+  if(!month||!year){month=new Date().getMonth()+1;year=new Date().getFullYear();}
 
   const dayCodes={};
   let i=0;

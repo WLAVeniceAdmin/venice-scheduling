@@ -376,6 +376,7 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
   <button class="tab-bar-btn active" onclick="switchTab('vt')">📅 Vacation Tracker</button>
   <button class="tab-bar-btn" onclick="switchTab('ra')">🏥 Room Assignment</button>
   <button class="tab-bar-btn" onclick="switchTab('np')">👩‍⚕️ NP/PA Tracker</button>
+  <button class="tab-bar-btn" onclick="switchTab('prelim')">🔍 Prelim Check</button>
 </nav>
 
 <!-- ═══════════════════════════════════════════════════════════
@@ -557,6 +558,50 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
     <div class="modules-wrap" id="RA_scenarioWrap"></div>
   </div>
 
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TAB 4 — PRELIM CHECK
+═══════════════════════════════════════════════════════════ -->
+<div id="page-prelim" class="page">
+<div class="main">
+  <div class="vt-rules-banner">
+    <div class="vt-rule-item"><span class="rule-badge cap">Prelim vs Suite</span><span>upload grid-by-staff xlsx to audit discrepancies</span></div>
+    <div class="vt-rule-item"><span class="rule-badge ok">Checks: cap violations · absence mismatches · holiday wheel</span></div>
+  </div>
+
+  <div class="upload-card" style="margin-bottom:20px;">
+    <div class="upload-area" id="PRELIM_dropZone" style="padding:32px;text-align:center;border:2px dashed var(--grey2);border-radius:var(--radius);cursor:pointer;" onclick="document.getElementById('PRELIM_fileInput').click()">
+      <input type="file" id="PRELIM_fileInput" accept=".xlsx,.xls" style="display:none">
+      <div style="font-size:28px;margin-bottom:8px;">📋</div>
+      <div style="font-weight:600;color:var(--navy);margin-bottom:4px;">Upload Prelim Grid-by-Staff</div>
+      <div style="font-size:12px;color:var(--text2);">VEN _ WLA-Venice and West LA … GRID_BY_STAFF.xlsx</div>
+    </div>
+  </div>
+
+  <div id="PRELIM_status" style="display:none;font-family:'DM Mono',monospace;font-size:12px;padding:10px 16px;border-radius:var(--radius);margin-bottom:16px;"></div>
+
+  <div id="PRELIM_results" style="display:none;">
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;" id="PRELIM_statsRow"></div>
+
+    <div style="display:flex;gap:20px;align-items:center;margin-bottom:14px;">
+      <h3 style="margin:0;font-family:'Instrument Serif',serif;color:var(--navy);" id="PRELIM_title">Prelim Schedule</h3>
+      <button class="btn-primary" onclick="PRELIM_importToVT()" id="PRELIM_importBtn" style="font-size:11px;padding:6px 14px;">⬆ Import into Vacation Tracker</button>
+    </div>
+
+    <div id="PRELIM_issues" style="margin-bottom:20px;"></div>
+
+    <div style="overflow-x:auto;">
+      <table id="PRELIM_table" style="border-collapse:collapse;font-size:11px;font-family:'DM Mono',monospace;white-space:nowrap;"></table>
+    </div>
+  </div>
+
+  <div class="empty-state" id="PRELIM_emptyState">
+    <div style="font-size:48px;margin-bottom:16px;">🔍</div>
+    <div style="font-family:'Instrument Serif',serif;font-size:22px;color:var(--navy);margin-bottom:8px;">Prelim Audit</div>
+    <div style="color:var(--text2);font-size:13px;">Upload the GRID_BY_STAFF prelim xlsx from KP scheduling.<br>The suite will flag cap violations and discrepancies against loaded VT data.</div>
+  </div>
 </div>
 </div>
 
@@ -960,7 +1005,7 @@ function isHWPhysician(name) {
 function switchTab(tab) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab-bar-btn').forEach((b,i)=>
-    b.classList.toggle('active',['vt','ra','np'][i]===tab));
+    b.classList.toggle('active',['vt','ra','np','prelim'][i]===tab));
   document.getElementById(`page-${tab}`).classList.add('active');
   if(tab==='ra') { RA_syncFromVT(); RA_render(); }
 }
@@ -2252,6 +2297,336 @@ function NP_render() {
 
 function NP_removeManual(i){NP_manualEntries.splice(i,1);NP_render();}
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PRELIM CHECK (PRELIM_)
+// ══════════════════════════════════════════════════════════════════════════════
+
+const PRELIM_NAME_MAP = {
+  'MOGHTADER':'moghtader','OZAKI':'ozaki','PHAM':'pham',
+  'BAZARGAN-LARI':'bazargan','BAZARGAN':'bazargan',
+  'CHEN':'chen','DAO':'dao','FANG':'fang','GREEN':'green',
+  'KIMM':'kimm','LAGOS':'lagos','MORALES':'morales',
+  'NGUYEN':'nguyen','NUDELL':'nudell','SAEEDIAN':'saeedian',
+  'SIEGEL':'siegel','ZAKKA':'zakka',
+};
+
+function PRELIM_nameToId(raw) {
+  const upper = raw.toUpperCase().replace(/^[A-Z]\.\s+/,'').trim();
+  // exact match first
+  if (PRELIM_NAME_MAP[upper]) return PRELIM_NAME_MAP[upper];
+  // prefix match (e.g. "LAGOS ESCOTO" → "LAGOS")
+  for (const key of Object.keys(PRELIM_NAME_MAP)) {
+    if (upper.startsWith(key)) return PRELIM_NAME_MAP[key];
+  }
+  return null;
+}
+
+function PRELIM_mapCode(cellText) {
+  if (!cellText || !cellText.trim()) return null;
+  const parts = cellText.split('\n');
+  const raw = parts[0].trim();
+  const timePart = parts[1]?.trim() || '';
+  const startMatch = timePart.match(/^(\d{2}):(\d{2})/);
+  const endMatch = timePart.match(/- (\d{2}):(\d{2})/);
+  let session = 'am';
+  if (startMatch) {
+    const h = parseInt(startMatch[1]);
+    session = h >= 13 ? 'pm' : 'am';
+    if (endMatch && parseInt(endMatch[1]) >= 16 && h < 12) session = 'both';
+  }
+  let code;
+  if (/^(A |P |EA |EP )(CLINIC|TAH|HALF)/i.test(raw)) code = 'F2F';
+  else if (/^(EA |EP )(IM|FM)/i.test(raw)) code = 'F2F';
+  else if (raw === 'V') code = 'VAC';
+  else if (raw === 'EL') code = 'EL';
+  else if (raw === 'LOA') code = 'LOA';
+  else if (raw === 'H') code = 'H';
+  else if (raw === 'SL') code = 'SL';
+  else if (/^OFF/.test(raw)) code = 'OFF';
+  else if (/^ET/.test(raw)) code = 'ET';
+  else if (/^IW/.test(raw)) code = 'IW';
+  else if (/^AT/.test(raw)) code = 'AT';
+  else if (raw === 'A') code = 'VAC';
+  else if (raw === 'NC') code = 'NC';
+  else if (raw === 'VV') code = 'VV';
+  else code = raw;
+  return { code, session };
+}
+
+let PRELIM_data = null; // { month, year, monthName, physicians: {id: {am:{day:code}, pm:{day:code}}} }
+
+function PRELIM_parse(arrayBuffer) {
+  const wb = XLSX.read(arrayBuffer, {type:'array', cellText:false, cellDates:false});
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:'', raw:true});
+  if (!raw.length) return null;
+
+  // Row 0 = headers: col 0="Staff Type", col 1="Name", col 2+ = date headers
+  const headerRow = raw[0];
+  // Parse month/year from first date header (e.g. "Dec / Tue 1")
+  let month = null, year = null, monthName = null;
+  const MON_NAMES = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+  for (let ci = 2; ci < headerRow.length; ci++) {
+    const h = String(headerRow[ci]).toLowerCase();
+    for (let mi = 0; mi < MON_NAMES.length; mi++) {
+      if (h.includes(MON_NAMES[mi])) { month = mi+1; break; }
+    }
+    const y4 = String(headerRow[ci]).match(/20\d{2}/);
+    if (y4) year = parseInt(y4[0]);
+    if (month) break;
+  }
+  if (!month) month = new Date().getMonth()+1;
+  if (!year) year = new Date().getFullYear();
+  monthName = new Date(year, month-1, 1).toLocaleString('default',{month:'long'});
+
+  // Map column index → day number
+  const colDay = {};
+  for (let ci = 2; ci < headerRow.length; ci++) {
+    const h = String(headerRow[ci]);
+    const dayMatch = h.match(/\b(\d{1,2})$/);
+    if (dayMatch) colDay[ci] = parseInt(dayMatch[1]);
+  }
+
+  // Parse provider blocks: name in col 1 of first row, continuation rows have blank col 1
+  const physicians = {};
+  let currentId = null;
+  let currentRows = [];
+
+  const flush = () => {
+    if (!currentId || !currentRows.length) return;
+    const am = {}, pm = {};
+    currentRows.forEach(row => {
+      for (const [ci, day] of Object.entries(colDay)) {
+        const cell = String(row[ci] || '').trim();
+        if (!cell) continue;
+        const mapped = PRELIM_mapCode(cell);
+        if (!mapped) continue;
+        if (mapped.session === 'both') {
+          if (!am[day]) am[day] = mapped.code;
+          if (!pm[day]) pm[day] = mapped.code;
+        } else if (mapped.session === 'am') {
+          if (!am[day]) am[day] = mapped.code;
+        } else {
+          if (!pm[day]) pm[day] = mapped.code;
+        }
+      }
+    });
+    physicians[currentId] = { am, pm };
+  };
+
+  for (let ri = 1; ri < raw.length; ri++) {
+    const row = raw[ri];
+    const nameCell = String(row[1] || '').trim();
+    if (nameCell) {
+      flush();
+      currentId = PRELIM_nameToId(nameCell);
+      currentRows = [row];
+    } else if (currentId) {
+      currentRows.push(row);
+    }
+  }
+  flush();
+
+  return { month, year, monthName, physicians };
+}
+
+function PRELIM_render() {
+  const d = PRELIM_data;
+  if (!d) return;
+  const numDays = new Date(d.year, d.month, 0).getDate();
+  const days = [];
+  for (let i = 1; i <= numDays; i++) {
+    const dow = new Date(d.year, d.month-1, i).getDay();
+    if (dow !== 0 && dow !== 6) days.push(i);
+  }
+
+  document.getElementById('PRELIM_title').textContent =
+    `${d.monthName} ${d.year} — ${Object.keys(d.physicians).length} providers parsed`;
+
+  // Stats
+  const capCodes = new Set(['VAC','EL','LOA']);
+  const capViolations = [], capWarnings = [];
+  days.forEach(day => {
+    let absentCount = 0;
+    Object.values(d.physicians).forEach(p => {
+      const amCode = p.am[day];
+      const pmCode = p.pm[day];
+      if ((amCode && capCodes.has(amCode)) || (pmCode && capCodes.has(pmCode))) absentCount++;
+    });
+    if (absentCount >= 5) capViolations.push({day, count: absentCount});
+    else if (absentCount === 4) capWarnings.push({day, count: absentCount});
+  });
+
+  // Discrepancies vs VT
+  const discrepancies = [];
+  if (VT_providerData.length) {
+    Object.entries(d.physicians).forEach(([id, prelimP]) => {
+      const vtP = VT_providerData.find(p => p.name?.toLowerCase().includes(id) ||
+        FT_ALL.find(f=>f.id===id)?.name?.toLowerCase() === p.name?.toLowerCase());
+      if (!vtP) return;
+      days.forEach(day => {
+        const prelimCodes = new Set([prelimP.am[day], prelimP.pm[day]].filter(Boolean));
+        const vtCodes = vtP.dayCodes?.[day] || new Set();
+        const prelimAbsent = [...prelimCodes].some(c => capCodes.has(c));
+        const vtAbsent = [...vtCodes].some(c => capCodes.has(c));
+        if (prelimAbsent !== vtAbsent) {
+          const name = FT_ALL.find(f=>f.id===id)?.name || id;
+          discrepancies.push({ name, day, prelim: [...prelimCodes].join('/') || 'F2F', vt: [...vtCodes].join('/') || 'F2F' });
+        }
+      });
+    });
+  }
+
+  const statColor = (n, warn, flag) => n >= flag ? 'flag' : n >= warn ? 'warn' : 'ok';
+  document.getElementById('PRELIM_statsRow').innerHTML = `
+    <div class="stat-card ${statColor(capViolations.length,1,1)}"><div class="stat-label">Cap Violations (5+)</div><div class="stat-value ${capViolations.length?'flag':''}">${capViolations.length}</div></div>
+    <div class="stat-card ${statColor(capWarnings.length,1,1)}"><div class="stat-label">At Limit (4 out)</div><div class="stat-value ${capWarnings.length?'warn':''}">${capWarnings.length}</div></div>
+    <div class="stat-card ${discrepancies.length?'flag':'ok'}"><div class="stat-label">VT Mismatches</div><div class="stat-value ${discrepancies.length?'flag':''}">${discrepancies.length}</div></div>
+    <div class="stat-card info"><div class="stat-label">Providers Found</div><div class="stat-value">${Object.keys(d.physicians).length}</div></div>`;
+
+  // Issues
+  let issuesHtml = '';
+  if (capViolations.length || capWarnings.length || discrepancies.length) {
+    issuesHtml = `<div class="sidebar-card" style="margin-bottom:16px;">
+      <div class="sidebar-title">⚠ Issues Found</div>`;
+    capViolations.forEach(({day,count}) => {
+      const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(d.year,d.month-1,day).getDay()];
+      issuesHtml += `<div class="flag-item"><span class="flag-badge flag">CAP+1</span>${dow} ${d.monthName} ${day}: <b>${count} physicians absent</b> (over cap of 4)</div>`;
+    });
+    capWarnings.forEach(({day,count}) => {
+      const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(d.year,d.month-1,day).getDay()];
+      issuesHtml += `<div class="flag-item"><span class="flag-badge warn">AT CAP</span>${dow} ${d.monthName} ${day}: ${count} physicians absent</div>`;
+    });
+    discrepancies.forEach(({name,day,prelim,vt}) => {
+      const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(d.year,d.month-1,day).getDay()];
+      issuesHtml += `<div class="flag-item"><span class="flag-badge warn">MISMATCH</span>${name} — ${dow} ${day}: Prelim <b>${prelim}</b> vs VT <b>${vt}</b></div>`;
+    });
+    issuesHtml += `</div>`;
+  } else {
+    issuesHtml = `<div style="background:#e8f7f5;border-radius:var(--radius);padding:12px 16px;font-size:12px;color:var(--teal);margin-bottom:16px;">✓ No issues found — prelim matches VT data and no cap violations.</div>`;
+  }
+  document.getElementById('PRELIM_issues').innerHTML = issuesHtml;
+
+  // Table
+  const providerIds = Object.keys(d.physicians).sort();
+  const codeColor = code => {
+    if (!code) return '';
+    if (code === 'F2F') return 'background:#e8f7f5;color:var(--teal)';
+    if (['VAC','EL','LOA'].includes(code)) return 'background:#fce8e8;color:var(--red)';
+    if (code === 'H') return 'background:#fff3cd;color:#8a6000';
+    if (['OFF','SL'].includes(code)) return 'background:#f0f0f0;color:var(--grey3)';
+    if (['ET','IW','AT','VV','NC'].includes(code)) return 'background:#e8edf7;color:var(--navy)';
+    return '';
+  };
+
+  let thead = `<tr><th style="padding:4px 8px;background:var(--navy);color:white;position:sticky;left:0;z-index:1;">Provider</th>`;
+  days.forEach(day => {
+    const dow = ['Su','Mo','Tu','We','Th','Fr','Sa'][new Date(d.year,d.month-1,day).getDay()];
+    thead += `<th style="padding:4px 6px;background:var(--navy);color:white;text-align:center;min-width:48px;">${dow}<br>${day}</th>`;
+  });
+  thead += `</tr>`;
+
+  let tbody = '';
+  providerIds.forEach(id => {
+    const p = d.physicians[id];
+    const name = FT_ALL.find(f=>f.id===id)?.name || id;
+    tbody += `<tr><td style="padding:4px 8px;font-weight:600;position:sticky;left:0;background:white;border-right:2px solid var(--grey);">${name}</td>`;
+    days.forEach(day => {
+      const am = p.am[day] || '';
+      const pm = p.pm[day] || '';
+      const amColor = codeColor(am);
+      const pmColor = codeColor(pm);
+      if (am === pm || (!am && !pm)) {
+        const c = am || pm;
+        tbody += `<td style="padding:3px 4px;text-align:center;${codeColor(c)};border:1px solid var(--grey);">${c||'—'}</td>`;
+      } else {
+        tbody += `<td style="padding:0;border:1px solid var(--grey);">
+          <div style="padding:1px 4px;font-size:10px;${amColor}">${am||'—'}</div>
+          <div style="padding:1px 4px;font-size:10px;${pmColor};border-top:1px solid var(--grey);">${pm||'—'}</div>
+        </td>`;
+      }
+    });
+    tbody += `</tr>`;
+  });
+
+  document.getElementById('PRELIM_table').innerHTML = `<thead>${thead}</thead><tbody>${tbody}</tbody>`;
+  document.getElementById('PRELIM_emptyState').style.display = 'none';
+  document.getElementById('PRELIM_results').style.display = 'block';
+}
+
+function PRELIM_importToVT() {
+  const d = PRELIM_data;
+  if (!d) return;
+  if (!confirm(`Import ${d.monthName} ${d.year} prelim data into Vacation Tracker? This will replace any existing VT data for providers found in the prelim.`)) return;
+
+  const numDays = new Date(d.year, d.month, 0).getDate();
+  const capCodes = new Set(['VAC','EL','LOA']);
+
+  Object.entries(d.physicians).forEach(([id, prelimP]) => {
+    let vtP = VT_providerData.find(p => {
+      const ftName = FT_ALL.find(f=>f.id===id)?.name?.toLowerCase();
+      return ftName && p.name?.toLowerCase().includes(ftName);
+    });
+    if (!vtP) {
+      const ftEntry = FT_ALL.find(f=>f.id===id);
+      if (!ftEntry) return;
+      vtP = { name: ftEntry.name, month: d.month, year: d.year, dayCodes: {} };
+      for (let day = 1; day <= numDays; day++) vtP.dayCodes[day] = new Set();
+      VT_providerData.push(vtP);
+    }
+    vtP.month = d.month;
+    vtP.year = d.year;
+    for (let day = 1; day <= numDays; day++) {
+      const codes = new Set();
+      [prelimP.am[day], prelimP.pm[day]].forEach(c => { if(c && c !== 'F2F') codes.add(c); });
+      vtP.dayCodes[day] = codes;
+    }
+  });
+
+  VT_renderResults();
+  switchTab('vt');
+  alert(`Imported ${Object.keys(d.physicians).length} providers into Vacation Tracker.`);
+}
+
+function PRELIM_setStatus(type, msg) {
+  const el = document.getElementById('PRELIM_status');
+  el.style.display = 'block';
+  el.style.background = type==='error' ? '#fce8e8' : '#e8f7f5';
+  el.style.color = type==='error' ? 'var(--red)' : 'var(--teal)';
+  el.textContent = msg;
+}
+
+function PRELIM_handleFile(file) {
+  if (!file) return;
+  PRELIM_setStatus('info', `Parsing ${file.name}…`);
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      PRELIM_data = PRELIM_parse(e.target.result);
+      if (!PRELIM_data) { PRELIM_setStatus('error','Could not parse file — make sure it is the GRID_BY_STAFF xlsx.'); return; }
+      PRELIM_setStatus('ok', `Parsed ${file.name} — ${PRELIM_data.monthName} ${PRELIM_data.year}, ${Object.keys(PRELIM_data.physicians).length} providers found.`);
+      PRELIM_render();
+    } catch(err) {
+      PRELIM_setStatus('error', 'Parse error: ' + err.message);
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// Wire up drag/drop and file input
+(function() {
+  const dz = document.getElementById('PRELIM_dropZone');
+  const fi = document.getElementById('PRELIM_fileInput');
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.style.borderColor='var(--teal)'; });
+  dz.addEventListener('dragleave', () => { dz.style.borderColor='var(--grey2)'; });
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.style.borderColor='var(--grey2)';
+    PRELIM_handleFile(e.dataTransfer.files[0]);
+  });
+  fi.addEventListener('change', e => PRELIM_handleFile(e.target.files[0]));
+})();
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 NP_render();

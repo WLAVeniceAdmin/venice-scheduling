@@ -749,6 +749,10 @@ function FB_init() {
         FB_applySnapshot(d);
       }
     }, err => FB_setStatus('error', 'Sync error — check console'));
+    // Auto-save every 2 minutes when there is data to save
+    setInterval(() => {
+      if (VT_providerData.length || NP_providerData.length) FB_saveNow();
+    }, 2 * 60 * 1000);
   } catch(e) { FB_setStatus('error', 'Firebase init failed'); console.error(e); }
 }
 

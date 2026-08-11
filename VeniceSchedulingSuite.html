@@ -417,6 +417,11 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
   </div>
 
   <div id="VT_resultsSection" style="display:none">
+    <!-- Month picker — shown when data for multiple months is loaded -->
+    <div id="VT_monthPicker" style="display:none;margin-bottom:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span style="font-size:11px;font-family:'DM Mono',monospace;color:var(--text2);">MONTH:</span>
+      <div id="VT_monthChips" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+    </div>
     <div class="results-layout">
       <div class="calendar-card">
         <div class="calendar-header">
@@ -1029,6 +1034,8 @@ function switchTab(tab) {
 // ══════════════════════════════════════════════════════════════════════════════
 let VT_loadedFiles = [];
 let VT_providerData = [];
+let VT_displayMonth = null;
+let VT_displayYear = null;
 
 // Drag & drop
 const VT_dropZone = document.getElementById('VT_dropZone');
@@ -1052,7 +1059,7 @@ function VT_removeFile(i) {
   document.getElementById('VT_processBtn').disabled=VT_loadedFiles.length===0;
 }
 function VT_clearAll() {
-  VT_loadedFiles=[];VT_providerData=[];
+  VT_loadedFiles=[];VT_providerData=[];VT_displayMonth=null;VT_displayYear=null;
   VT_renderFileList();
   document.getElementById('VT_processBtn').disabled=true;
   document.getElementById('VT_clearBtn').style.display='none';
@@ -1142,13 +1149,53 @@ function VT_getAbsencesForDate(dateStr) {
   return out;
 }
 
+function VT_setDisplayMonth(m, y) {
+  VT_displayMonth = m; VT_displayYear = y;
+  VT_renderResults();
+}
+
 function VT_renderResults() {
-  const month=VT_providerData[0].month,year=VT_providerData[0].year;
+  if (!VT_providerData.length) return;
+
+  // Build sorted list of unique month/years across all loaded providers
+  const monthSet = {};
+  VT_providerData.forEach(p => {
+    const key = `${p.year}-${String(p.month).padStart(2,'0')}`;
+    if (!monthSet[key]) monthSet[key] = {month: p.month, year: p.year};
+  });
+  const availableMonths = Object.values(monthSet).sort((a,b) => a.year!==b.year ? a.year-b.year : a.month-b.month);
+
+  // Default display month to the latest available
+  if (!VT_displayMonth || !monthSet[`${VT_displayYear}-${String(VT_displayMonth).padStart(2,'0')}`]) {
+    const latest = availableMonths[availableMonths.length-1];
+    VT_displayMonth = latest.month; VT_displayYear = latest.year;
+  }
+
+  const month = VT_displayMonth, year = VT_displayYear;
+
+  // Render month picker
+  const picker = document.getElementById('VT_monthPicker');
+  const chips = document.getElementById('VT_monthChips');
+  if (availableMonths.length > 1) {
+    picker.style.display = 'flex';
+    chips.innerHTML = availableMonths.map(({month:m, year:y}) => {
+      const label = new Date(y,m-1,1).toLocaleString('default',{month:'short', year:'numeric'});
+      const active = m===month && y===year;
+      return `<button onclick="VT_setDisplayMonth(${m},${y})" style="padding:4px 12px;border-radius:20px;border:1px solid ${active?'var(--navy)':'var(--grey2)'};background:${active?'var(--navy)':'white'};color:${active?'white':'var(--text2)'};font-size:11px;cursor:pointer;font-family:'DM Mono',monospace;">${label}</button>`;
+    }).join('');
+  } else {
+    picker.style.display = 'none';
+  }
+
+  // Filter providers for the selected month
+  const providers = VT_providerData.filter(p => p.month===month && p.year===year);
+  if (!providers.length) return;
+
   const numDays=new Date(year,month,0).getDate();
   const dowNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const monthName=new Date(year,month-1,1).toLocaleString('default',{month:'long'});
 
-  document.getElementById('VT_calTitle').textContent=`${monthName} ${year} — ${VT_providerData.length} Provider${VT_providerData.length!==1?'s':''} Loaded`;
+  document.getElementById('VT_calTitle').textContent=`${monthName} ${year} — ${providers.length} Provider${providers.length!==1?'s':''} Loaded`;
 
   const dayData={};
   for(let d=1;d<=numDays;d++){
@@ -1157,11 +1204,11 @@ function VT_renderResults() {
     const isWeekend=dow===0||dow===6;
     const hwInfo=HW_DATES[dk];
     // Only count CAP_CODES for cap
-    const capProviders=VT_providerData.filter(p=>{
+    const capProviders=providers.filter(p=>{
       const codes=p.dayCodes[d];
       return codes&&[...codes].some(c=>CAP_CODES.has(c));
     });
-    const outProviders=VT_providerData.filter(p=>p.outDays.has(d));
+    const outProviders=providers.filter(p=>p.outDays.has(d));
     dayData[d]={dk,dow,isWeekend,hwInfo,outProviders,capProviders,count:capProviders.length};
   }
 
@@ -1171,7 +1218,7 @@ function VT_renderResults() {
     if(dd.isWeekend)return;
     if(dd.count>=5)statFlag++;else if(dd.count===4)statWarn++;else statOk++;
   });
-  document.getElementById('VT_statProviders').textContent=VT_providerData.length;
+  document.getElementById('VT_statProviders').textContent=providers.length;
   document.getElementById('VT_statOk').textContent=statOk;
   document.getElementById('VT_statWarn').textContent=statWarn;
   document.getElementById('VT_statFlag').textContent=statFlag;
@@ -1179,7 +1226,7 @@ function VT_renderResults() {
 
   const head=document.getElementById('VT_calHead');
   const body=document.getElementById('VT_calBody');
-  const provCols=VT_providerData.map(p=>`<th class="provider-col">${p.name.split(/[,\s]+/)[0]}</th>`).join('');
+  const provCols=providers.map(p=>`<th class="provider-col">${p.name.split(/[,\s]+/)[0]}</th>`).join('');
   head.innerHTML=`<tr><th class="date-col">Date</th><th>Day</th>${provCols}<th class="count-col">#</th></tr>`;
   body.innerHTML='';
   for(let d=1;d<=numDays;d++){
@@ -1190,10 +1237,9 @@ function VT_renderResults() {
     else if(dd.count>=5)rowClass='flagged';
     else if(dd.count===4)rowClass='at-limit';
 
-    const provCells=VT_providerData.map(p=>{
+    const provCells=providers.map(p=>{
       const codes=p.dayCodes[d];
       if(codes&&codes.size>0){
-        // Show first meaningful code
         const c=[...codes].find(x=>x!=='SL')||[...codes][0];
         const pillClass=c==='VV'?'VV':c;
         return `<td><span class="code-pill ${pillClass}">${c}</span></td>`;
@@ -1234,7 +1280,7 @@ function VT_renderResults() {
         <div class="hw-text">${monthName} ${d} — ${dd.hwInfo[0].name} (Grp ${dd.hwInfo[0].group})</div>
       </div>`).join('');
 
-  document.getElementById('VT_providerList').innerHTML=VT_providerData.map(p=>{
+  document.getElementById('VT_providerList').innerHTML=providers.map(p=>{
     const total=p.outDays.size;
     const codes={};
     Object.values(p.dayCodes).forEach(s=>s.forEach(c=>{codes[c]=(codes[c]||0)+1;}));

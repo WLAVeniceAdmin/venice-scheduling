@@ -357,7 +357,7 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
     <div class="logo-icon">🏥</div>
     <div>
       <div class="logo-text">Venice Clinic</div>
-      <div class="logo-sub">Scheduling Suite</div>
+      <div class="logo-sub">Family Medicine / Internal Medicine — Scheduling Suite</div>
     </div>
   </div>
   <div id="headerBadge" style="font-size:11px;color:rgba(255,255,255,.5);font-family:'DM Mono',monospace;"></div>
@@ -812,9 +812,9 @@ function FB_applySnapshot(d) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 const HOLIDAY_WHEEL = {
-  A: { name:'Thanksgiving', physicians:['bazargan-lari','bazargan','kimm','lagos','morales','pham','tsung'], dates: hwRange(2026,11,23,29) },
+  A: { name:'Thanksgiving', physicians:['bazargan','kimm','lagos','morales','pham'], dates: hwRange(2026,11,23,29) },
   B: { name:'Christmas',    physicians:['dao','fang','green','nguyen','nudell','ozaki'],                    dates: hwRange(2026,12,21,27) },
-  C: { name:'New Year',     physicians:['chen','hartmans','moghtader','saeedian','siegel','zakka'],         dates: [...hwRange(2026,12,28,31),...hwRange(2027,1,1,3)] }
+  C: { name:'New Year',     physicians:['chen','moghtader','saeedian','siegel','zakka'],         dates: [...hwRange(2026,12,28,31),...hwRange(2027,1,1,3)] }
 };
 function hwRange(y,m,s,e){const o=[];for(let d=s;d<=e;d++)o.push(dateKey(new Date(y,m-1,d)));return o;}
 function dateKey(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
@@ -839,7 +839,8 @@ const FT_MAIN = [
 const FT_MOD150 = [
   {id:'bazargan', name:'Bazargan-Lari',fullName:'Bazargan-Lari',   rooms:['M','N']},
   {id:'green',    name:'Green',        fullName:'Green, D',         rooms:['O','P']},
-  {id:'hartmans', name:'Hartmans',     fullName:'Hartmans, S',      rooms:['R','S']},
+  {id:'wessel',   name:'Wessel',       fullName:'Wessel',           rooms:[]},
+  {id:'nori',     name:'Nori',         fullName:'Nori',             rooms:[]},
 ];
 const FT_ALL = [...FT_MAIN, ...FT_MOD150];
 
@@ -881,7 +882,6 @@ const WEEKLY_SHIFTS = {
   kimm:     {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'},3:{am:'VV',pm:'OFF'},  4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'OFF'}},
   bazargan: {1:{am:'AT',pm:'VV'},  2:{am:'F2F',pm:'AT'},3:{am:'AT',pm:'AT'},   4:{am:'F2F',pm:'AT'},5:{am:'F2F',pm:'AT'}},
   green:    {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'},3:{am:'OFF',pm:'F2F'}, 4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'OFF'}},
-  hartmans: {1:{am:'OFF',pm:'OFF'},2:{am:'F2F',pm:'F2F'},3:{am:'OFF',pm:'OFF'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
 };
 
 const ALL_NPS = [
@@ -1204,7 +1204,7 @@ const DOTD_ROSTER = [
   {id:'dao',      name:'Dao'},
   {id:'fang',     name:'Fang'},
   {id:'green',    name:'Green'},
-  {id:'hartmans', name:'Hartmans'},
+
   {id:'kimm',     name:'Kimm'},
   {id:'lagos',    name:'Lagos'},
   {id:'moghtader',name:'Moghtader'},
@@ -1560,14 +1560,15 @@ function RA_renderFTRoom(r, absentSet, dow) {
   const isOut=absentSet.has(provider.id);
   const floatUsing=RA_getFloatInRoom(r,dow,absentSet);
   const shift=RA_getShift(provider.id,dow);
-  // If provider is doing VV, their home room is effectively free
-  const isVV=shift==='VV';
+  // Room is only occupied when provider is F2F; all other codes (VV, IW, ET, AT, OFF) free the room
+  const roomFree=shift && shift!=='F2F';
   let provTag='';
   if(isOut){
     provTag=`<div class="provider-tag out">✗ ${provider.name}</div>`;
     if(floatUsing)provTag+=`<div class="provider-tag float" style="margin-top:2px;font-size:11px;">↪ ${floatUsing}</div>`;
-  } else if(isVV) {
-    provTag=`<div class="provider-tag vv-tag">📱 ${provider.name}</div><div class="session-code">VV (room free)</div>`;
+  } else if(roomFree) {
+    const label=shift==='VV'?'📱 VV':shift;
+    provTag=`<div class="provider-tag vv-tag">${provider.name}</div><div class="session-code">${label} (room free)</div>`;
     if(floatUsing)provTag+=`<div class="provider-tag float" style="margin-top:2px;font-size:11px;">↪ ${floatUsing}</div>`;
   } else {
     provTag=`<div class="provider-tag ft">${provider.name}</div>`;
@@ -1643,10 +1644,12 @@ function RA_renderModules(containerId, absentSet) {
   const mod150Cards=FT_MOD150.map(p=>{
     const isOut=absentSet.has(p.id);
     const shift=RA_getShift(p.id,dow);
+    const roomFree=shift && shift!=='F2F';
+    if(!p.rooms.length) return `<div class="room-card"><div class="room-num">TBD</div><div class="provider-tag ft">${p.name}</div><div class="session-code">Room TBD</div></div>`;
     return p.rooms.map(r=>`<div class="room-card">
       <div class="room-num">Rm ${r}</div>
-      <div class="provider-tag ${isOut?'out':'ft'}">${isOut?'✗ ':''}${p.name}</div>
-      ${shift?`<div class="session-code">${shift}</div>`:''}
+      <div class="provider-tag ${isOut?'out':roomFree?'vv-tag':'ft'}">${isOut?'✗ ':''}${p.name}</div>
+      ${isOut?'':(roomFree?`<div class="session-code">${shift==='VV'?'📱 VV':shift} (room free)</div>`:(shift?`<div class="session-code">${shift}</div>`:''))}
     </div>`).join('');
   }).join('');
   const obesityCards=Object.entries(OBESITY_ROOMS).map(([r,name])=>`<div class="room-card">
@@ -2018,7 +2021,6 @@ async function RA_exportDailySchedule() {
   [
     {id:'bazargan', rooms:'M & N', fullName:'Bazargan-Lari'},
     {id:'green',    rooms:'O & P', fullName:'Green, D'},
-    {id:'hartmans', rooms:'R & S', fullName:'Hartmans, S'},
   ].forEach((p,i) => addMDRow(p.rooms, p.id, p.fullName, i));
 
   addBlankRow();

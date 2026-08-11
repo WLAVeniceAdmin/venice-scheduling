@@ -1123,13 +1123,20 @@ function VT_parseProviderFile(ab, filename) {
 }
 
 async function VT_processFiles() {
-  VT_providerData=[];
   const btn=document.getElementById('VT_processBtn');
   btn.disabled=true;btn.textContent='⏳ Processing...';
+  const newProviders=[];
   for(const file of VT_loadedFiles){
-    try{const ab=await file.arrayBuffer();VT_providerData.push(VT_parseProviderFile(new Uint8Array(ab),file.name));}
+    try{const ab=await file.arrayBuffer();newProviders.push(VT_parseProviderFile(new Uint8Array(ab),file.name));}
     catch(e){console.error('VT parse error:',file.name,e);}
   }
+  // Merge into existing data: replace any provider+month combo that was just re-uploaded
+  newProviders.forEach(np=>{
+    const idx=VT_providerData.findIndex(p=>p.name===np.name&&p.month===np.month&&p.year===np.year);
+    if(idx>=0) VT_providerData[idx]=np; else VT_providerData.push(np);
+  });
+  // Switch display to the month of newly compiled files
+  if(newProviders.length){ VT_displayMonth=newProviders[0].month; VT_displayYear=newProviders[0].year; }
   btn.disabled=false;btn.textContent='⚡ Compile Schedule';
   if(VT_providerData.length) VT_renderResults();
 }

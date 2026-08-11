@@ -827,9 +827,16 @@ async function FB_saveNow() {
   } catch(e) { FB_setStatus('error', 'Save failed: ' + (e.code||e.message||e)); console.error('FB_saveNow error:', e); }
 }
 
+function FB_mergeProviders(incoming) {
+  incoming.forEach(np => {
+    const idx = VT_providerData.findIndex(p => p.name===np.name && p.month===np.month && p.year===np.year);
+    if (idx >= 0) VT_providerData[idx] = np; else VT_providerData.push(np);
+  });
+}
+
 function FB_applySnapshot(d) {
   if (d.vtProviders?.length) {
-    VT_providerData = FB_deserializeProviders(d.vtProviders);
+    FB_mergeProviders(FB_deserializeProviders(d.vtProviders));
     VT_renderResults();
   }
   if (d.npProviders?.length) {

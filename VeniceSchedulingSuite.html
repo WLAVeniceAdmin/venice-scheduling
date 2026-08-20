@@ -378,6 +378,7 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
   <button class="tab-bar-btn" onclick="switchTab('ra')">🏥 Room Assignment</button>
   <button class="tab-bar-btn" onclick="switchTab('np')">👩‍⚕️ NP/PA Tracker</button>
   <button class="tab-bar-btn" onclick="switchTab('prelim')">🔍 Prelim Check</button>
+  <button class="tab-bar-btn" onclick="switchTab('heatmap')">🌡️ Room Heatmap</button>
 </nav>
 
 <!-- ═══════════════════════════════════════════════════════════
@@ -618,6 +619,20 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
     <div style="font-family:'Instrument Serif',serif;font-size:22px;color:var(--navy);margin-bottom:8px;">Prelim Audit</div>
     <div style="color:var(--text2);font-size:13px;">Upload the GRID_BY_STAFF prelim xlsx from KP scheduling.<br>The suite will flag cap violations and discrepancies against loaded VT data.</div>
   </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TAB 5 — ROOM HEATMAP
+═══════════════════════════════════════════════════════════ -->
+<div id="page-heatmap" class="page">
+<div class="main">
+  <div class="vt-rules-banner" style="margin-bottom:18px;">
+    <div class="vt-rule-item"><span class="rule-badge ok">MOD 361</span><span>Siegel · Morales · Nudell · Zakka · Fang · Dao · Lagos</span></div>
+    <div class="vt-rule-item"><span class="rule-badge code">MOD 362</span><span>Saeedian · Nguyen · Chen · Kimm · Green · Wessel · Nori</span></div>
+    <div class="vt-rule-item"><span class="rule-badge hw">MOD 150</span><span>Bazargan-Lari · Ozaki · Pham · Moghtader</span></div>
+  </div>
+  <div id="HM_container"></div>
 </div>
 </div>
 
@@ -1052,9 +1067,10 @@ function isHWPhysician(name) {
 function switchTab(tab) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab-bar-btn').forEach((b,i)=>
-    b.classList.toggle('active',['vt','ra','np','prelim'][i]===tab));
+    b.classList.toggle('active',['vt','ra','np','prelim','heatmap'][i]===tab));
   document.getElementById(`page-${tab}`).classList.add('active');
   if(tab==='ra') { RA_syncFromVT(); RA_render(); }
+  if(tab==='heatmap') HM_render();
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -2814,6 +2830,114 @@ function PRELIM_handleFile(file) {
 // ── INIT ──────────────────────────────────────────────────────────────────────
 NP_render();
 RA_init();
+// ══════════════════════════════════════════════════════════════════════════════
+// ROOM HEATMAP (HM_)
+// ══════════════════════════════════════════════════════════════════════════════
+const HM_MODULES = [
+  {label:'MOD 361 — Internal Medicine', color:'#185fa5', physicians:[
+    {id:'siegel',  label:'Siegel',  rooms:'1 & 4'},
+    {id:'morales', label:'Morales', rooms:'2 & 3'},
+    {id:'nudell',  label:'Nudell',  rooms:'5 & 6'},
+    {id:'zakka',   label:'Zakka',   rooms:'7 & 8'},
+    {id:'fang',    label:'Fang',    rooms:'9 & 10'},
+    {id:'dao',     label:'Dao',     rooms:'float'},
+    {id:'lagos',   label:'Lagos',   rooms:'float'},
+  ]},
+  {label:'MOD 362 — Internal Medicine', color:'#1baf7a', physicians:[
+    {id:'saeedian', label:'Saeedian', rooms:'11 & 12'},
+    {id:'nguyen',   label:'Nguyen',   rooms:'13 & 14'},
+    {id:'chen',     label:'Chen',     rooms:'23 & 24'},
+    {id:'kimm',     label:'Kimm',     rooms:'25 & 26'},
+    {id:'green',    label:'Green',    rooms:'TBD'},
+    {id:'wessel',   label:'Wessel ★', rooms:'TBD'},
+    {id:'nori',     label:'Nori ★',   rooms:'TBD'},
+  ]},
+  {label:'MOD 150 — Family Medicine (+ Bazargan-Lari / IM)', color:'#eb6834', physicians:[
+    {id:'bazargan',  label:'Bazargan-Lari', rooms:'M & N'},
+    {id:'ozaki',     label:'Ozaki',         rooms:'TBD'},
+    {id:'pham',      label:'Pham',          rooms:'TBD'},
+    {id:'moghtader', label:'Moghtader',     rooms:'TBD'},
+  ]},
+];
+
+let HM_rendered = false;
+function HM_render() {
+  if(HM_rendered) return;
+  HM_rendered = true;
+  const cont = document.getElementById('HM_container');
+  if(!cont) return;
+
+  const DAYS=['Mon','Tue','Wed','Thu','Fri'];
+  const SESS=['AM','PM'];
+  const totals=new Array(10).fill(0);
+
+  function cc(c){
+    if(!c||c==='OFF')return 'background:var(--grey);color:var(--grey3);border:1px solid var(--grey2)';
+    if(c==='F2F')return 'background:#2a78d6;color:#fff';
+    if(c==='VV')return 'background:#e6f1fb;color:#185fa5;border:1px solid #b5d4f4';
+    if(c==='AT')return 'background:#faeeda;color:#854f0b;border:1px solid #fac775';
+    if(c==='ET')return 'background:#eaf3de;color:#3b6d11;border:1px solid #c0dd97';
+    if(c==='IW')return 'background:#fbeaf0;color:#72243e;border:1px solid #f4c0d1';
+    return 'background:var(--grey);color:var(--grey3)';
+  }
+  function cl(c){return(!c||c==='OFF')?'—':c;}
+
+  const cols='118px '+DAYS.flatMap(()=>['1fr','1fr']).join(' ');
+  const gridStyle=`display:grid;grid-template-columns:${cols};gap:2px;`;
+
+  let html=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:11px;color:var(--text2);">
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:11px;height:11px;border-radius:2px;background:#2a78d6;display:inline-block"></span>F2F — room in use</span>
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:11px;height:11px;border-radius:2px;background:#e6f1fb;border:1px solid #b5d4f4;display:inline-block"></span>VV</span>
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:11px;height:11px;border-radius:2px;background:#faeeda;border:1px solid #fac775;display:inline-block"></span>AT</span>
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:11px;height:11px;border-radius:2px;background:#eaf3de;border:1px solid #c0dd97;display:inline-block"></span>ET</span>
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:11px;height:11px;border-radius:2px;background:#fbeaf0;border:1px solid #f4c0d1;display:inline-block"></span>IW</span>
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:11px;height:11px;border-radius:2px;background:var(--grey);border:1px solid var(--grey2);display:inline-block"></span>OFF</span>
+  </div>`;
+
+  // Column headers
+  html+=`<div style="${gridStyle}margin-bottom:4px;">
+    <div></div>
+    ${DAYS.flatMap(d=>SESS.map(s=>`<div style="font-size:9px;color:var(--text2);text-align:center;padding:2px 0;line-height:1.3;">${d}<br>${s}</div>`)).join('')}
+  </div>`;
+
+  // Per-module rows — collect cell data for totals
+  const cellMatrix=[]; // [rowIdx][colIdx] = isF2F
+
+  HM_MODULES.forEach(mod=>{
+    html+=`<div style="font-size:11px;font-weight:500;color:var(--text2);padding:4px 8px;background:var(--grey);border-radius:4px;border-left:3px solid ${mod.color};display:inline-block;margin:8px 0 4px;">${mod.label}</div>`;
+    mod.physicians.forEach(p=>{
+      const ws=WEEKLY_SHIFTS[p.id];
+      html+=`<div style="${gridStyle}margin-bottom:2px;">
+        <div style="font-size:11px;display:flex;flex-direction:column;justify-content:center;padding-right:6px;">
+          <span>${p.label}</span><span style="font-size:9px;color:var(--text2);">${p.rooms}</span>
+        </div>`;
+      DAYS.forEach((d,di)=>{
+        SESS.forEach((s,si)=>{
+          const idx=di*2+si;
+          const code=ws?.[di+1]?.[si===0?'am':'pm']||'OFF';
+          if(code==='F2F') totals[idx]++;
+          html+=`<div style="height:26px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:500;${cc(code)}">${cl(code)}</div>`;
+        });
+      });
+      html+='</div>';
+    });
+  });
+
+  // Summary bar
+  const blues=['#e6f1fb','#b5d4f4','#85b7eb','#5599e0','#378add','#2270c8','#185fa5','#0e4d8c','#0c447c','#042c53'];
+  const maxT=Math.max(...totals);
+  html+=`<div style="margin-top:10px;font-size:10px;font-weight:500;color:var(--text2);padding:3px 7px;background:var(--grey);border-radius:4px;display:inline-block;margin-bottom:4px;">total F2F rooms in use — all modules</div>`;
+  html+=`<div style="${gridStyle}">
+    <div style="font-size:10px;color:var(--text2);display:flex;align-items:center;">Total</div>
+    ${totals.map((n,i)=>{
+      const idx=Math.min(9,Math.round((n/maxT)*9));
+      return `<div style="height:22px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;background:${blues[idx]};color:${idx>=4?'#fff':'#185fa5'}">${n}</div>`;
+    }).join('')}
+  </div>`;
+
+  cont.innerHTML=html;
+}
+
 FB_init();
 </script>
 </body>

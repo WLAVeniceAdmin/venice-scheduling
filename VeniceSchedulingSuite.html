@@ -907,7 +907,7 @@ function dateKey(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart
 const HW_DATES={};
 Object.entries(HOLIDAY_WHEEL).forEach(([g,info])=>info.dates.forEach(dk=>{if(!HW_DATES[dk])HW_DATES[dk]=[];HW_DATES[dk].push({group:g,name:info.name});}));
 
-// FT Physicians
+// FT Physicians — MOD 362 (Internal Medicine)
 const FT_MAIN = [
   {id:'siegel',   name:'Siegel',       fullName:'Siegel, J',       rooms:[1,4]},
   {id:'morales',  name:'Morales',      fullName:'Morales, G',      rooms:[2,3]},
@@ -916,17 +916,19 @@ const FT_MAIN = [
   {id:'fang',     name:'Fang',         fullName:'Fang, K',         rooms:[9,10]},
   {id:'saeedian', name:'Saeedian',     fullName:'Saeedian, J',     rooms:[11,12]},
   {id:'nguyen',   name:'Nguyen',       fullName:'Nguyen, L',       rooms:[13,14]},
-  {id:'ozaki',    name:'Ozaki',        fullName:'Ozaki, R',        rooms:[15,16]},
-  {id:'pham',     name:'Pham',         fullName:'Pham, A',         rooms:[17,18]},
-  {id:'moghtader',name:'Moghtader',    fullName:'Moghtader, S',    rooms:[21,22]},
   {id:'chen',     name:'Chen',         fullName:'Chen, A',         rooms:[23,24]},
   {id:'kimm',     name:'Kimm',         fullName:'Kimm, S',         rooms:[25,26]},
+  {id:'green',    name:'Green',        fullName:'Green, D',        rooms:[15,16]},  // moved from 150→362; rooms TBD (15-16 placeholder)
+  {id:'wessel',   name:'Wessel',       fullName:'Wessel',          rooms:[17,18]},  // new; rooms TBD (17-18 placeholder)
+  {id:'nori',     name:'Nori',         fullName:'Nori',            rooms:[21,22]},  // new; rooms TBD (21-22 placeholder)
 ];
+// MOD 150 — Family Medicine (Bazargan-Lari + FM physicians moved from 362)
+// Room letters for Pham, Moghtader, Ozaki are TBD pending updated room chart from Elene
 const FT_MOD150 = [
   {id:'bazargan', name:'Bazargan-Lari',fullName:'Bazargan-Lari',   rooms:['M','N']},
-  {id:'green',    name:'Green',        fullName:'Green, D',         rooms:['O','P']},
-  {id:'wessel',   name:'Wessel',       fullName:'Wessel',           rooms:[]},
-  {id:'nori',     name:'Nori',         fullName:'Nori',             rooms:[]},
+  {id:'ozaki',    name:'Ozaki',        fullName:'Ozaki, R',        rooms:['O','P']},   // TBD
+  {id:'pham',     name:'Pham',         fullName:'Pham, A',         rooms:['Q','R']},   // TBD
+  {id:'moghtader',name:'Moghtader',    fullName:'Moghtader, S',    rooms:['S','T']},   // TBD
 ];
 const FT_ALL = [...FT_MAIN, ...FT_MOD150];
 
@@ -2184,8 +2186,8 @@ async function RA_exportDailySchedule() {
   // ── Spacer ──
   addBlankRow();
 
-  // ── MODULE 361 ──
-  addSectionHeader('Module 361', 'Ext 3896');
+  // ── MODULE 362 — Internal Medicine ──
+  addSectionHeader('Module 362', 'Ext 2441 & 3898');
   [
     {id:'dao',      rooms:floatRooms('dao')||'(float)', fullName:'Dao, B'},
     {id:'fang',     rooms:'9 & 10',                     fullName:'Fang, K'},
@@ -2195,28 +2197,23 @@ async function RA_exportDailySchedule() {
     {id:'saeedian', rooms:'11 & 12',                    fullName:'Saeedian, J'},
     {id:'siegel',   rooms:'1 & 4',                      fullName:'Siegel, J'},
     {id:'zakka',    rooms:'7 & 8',                      fullName:'Zakka, K'},
+    {id:'chen',     rooms:'23 & 24',                    fullName:'Chen, A'},
+    {id:'green',    rooms:'TBD',                        fullName:'Green, D'},
+    {id:'kimm',     rooms:'25 & 26',                    fullName:'Kimm, S'},
+    {id:'nguyen',   rooms:'13 & 14',                    fullName:'Nguyen, L'},
+    {id:'nori',     rooms:'TBD',                        fullName:'Nori'},
+    {id:'wessel',   rooms:'TBD',                        fullName:'Wessel'},
   ].forEach((p,i) => addMDRow(p.rooms, p.id, p.fullName, i));
 
   addBlankRow();
 
-  // ── MODULE 362 ──
-  addSectionHeader('Module 362', 'Ext 2441 & 3898');
+  // ── MODULE 150 — Family Medicine ──
+  addSectionHeader('Module 150 — FM', 'Ext 6744', 'Other Assignment');
   [
-    {id:'chen',      rooms:'23 & 24', fullName:'Chen, A'},
-    {id:'kimm',      rooms:'25 & 26', fullName:'Kimm, S'},
-    {id:'moghtader', rooms:'21 & 22', fullName:'Moghtader, S'},
-    {id:'nguyen',    rooms:'13 & 14', fullName:'Nguyen, L'},
-    {id:'ozaki',     rooms:'15 & 16', fullName:'Ozaki, R'},
-    {id:'pham',      rooms:'17 & 18', fullName:'Pham, A'},
-  ].forEach((p,i) => addMDRow(p.rooms, p.id, p.fullName, i));
-
-  addBlankRow();
-
-  // ── MODULE 150 ──
-  addSectionHeader('Module 150 — APC', 'Ext 6744', 'Other Assignment');
-  [
-    {id:'bazargan', rooms:'M & N', fullName:'Bazargan-Lari'},
-    {id:'green',    rooms:'O & P', fullName:'Green, D'},
+    {id:'bazargan',  rooms:'M & N', fullName:'Bazargan-Lari'},
+    {id:'ozaki',     rooms:'TBD',   fullName:'Ozaki, R'},
+    {id:'pham',      rooms:'TBD',   fullName:'Pham, A'},
+    {id:'moghtader', rooms:'TBD',   fullName:'Moghtader, S'},
   ].forEach((p,i) => addMDRow(p.rooms, p.id, p.fullName, i));
 
   addBlankRow();

@@ -129,6 +129,7 @@ body{font-family:'DM Sans',sans-serif;background:#f0f4f8;color:var(--text);min-h
 .code-pill.clinic{background:var(--teal-lt);color:var(--teal);}
 .code-pill.off{background:var(--grey);color:var(--grey3);}
 .code-pill.hw{background:var(--purple-lt);color:var(--purple);}
+.code-pill.base{background:var(--grey);color:var(--grey3);opacity:0.75;font-style:italic;}
 .count-bubble{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;
   border-radius:50%;font-weight:700;font-size:12px;font-family:'DM Mono',monospace;}
 .count-bubble.ok{background:var(--teal-lt);color:var(--teal);}
@@ -416,6 +417,15 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
     <div class="stat-card hw"><div class="stat-label">Holiday Wheel Days</div><div class="stat-value hw" id="VT_statHw">0</div></div>
   </div>
 
+  <!-- Base Profiles panel -->
+  <div style="margin-top:12px;">
+    <button onclick="VT_toggleBaseProfiles()" class="btn-secondary" style="font-size:11px;padding:5px 14px;">📋 Base Profiles</button>
+    <div id="VT_bpPanel" style="display:none;margin-top:10px;overflow-x:auto;">
+      <div style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;margin-bottom:8px;">REGULAR SCHEDULE — USED WHEN MONTHLY REQUEST IS BLANK &nbsp;·&nbsp; <span style="background:var(--grey);color:var(--grey3);padding:1px 6px;border-radius:8px;font-style:italic;opacity:0.9;">grey pills</span> = base profile defaults</div>
+      <div id="VT_bpTable"></div>
+    </div>
+  </div>
+
   <div id="VT_resultsSection" style="display:none">
     <!-- Month picker — shown when data for multiple months is loaded -->
     <div id="VT_monthPicker" style="display:none;margin-bottom:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -437,6 +447,7 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
           <div class="legend-item"><div class="legend-dot" style="background:var(--purple-lt);border:1px solid #d4b8f5"></div>Holiday Wheel</div>
           <div class="legend-item"><div class="legend-dot" style="background:var(--grey2)"></div>Weekend</div>
           <div class="legend-item"><div class="legend-dot" style="background:var(--teal-lt);border:1px solid #a8ddd8"></div>VV (virtual — not capped)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--grey);opacity:0.75"></div><em>Italics</em> = base profile (no request on file)</div>
         </div>
       </div>
       <div class="sidebar">
@@ -942,21 +953,25 @@ const FLOAT_SCHEDULE = {
   }
 };
 
+// Base weekly schedule profiles — sourced from physician profile docs (physician profiles folder).
+// Keys: 1=Mon … 5=Fri. Used as fallback when a monthly schedule day is blank.
 const WEEKLY_SHIFTS = {
-  siegel:   {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'},3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'VV'}},
-  morales:  {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'},3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
-  nudell:   {1:{am:'VV',pm:'F2F'}, 2:{am:'VV',pm:'F2F'}, 3:{am:'F2F',pm:'ET'},4:{am:'F2F',pm:'OFF'},5:{am:'OFF',pm:'OFF'}},
-  zakka:    {1:{am:'F2F',pm:'F2F'},2:{am:'VV',pm:'ET'}, 3:{am:'IW',pm:'F2F'}, 4:{am:'F2F',pm:'F2F'},5:{am:'IW',pm:'F2F'}},
-  fang:     {1:{am:'OFF',pm:'F2F'},2:{am:'F2F',pm:'ET'},3:{am:'F2F',pm:'F2F'},4:{am:'VV',pm:'F2F'}, 5:{am:'F2F',pm:'F2F'}},
-  saeedian: {1:{am:'F2F',pm:'F2F'},2:{am:'VV',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
-  nguyen:   {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'F2F'},3:{am:'F2F',pm:'F2F'},4:{am:'ET',pm:'VV'}, 5:{am:'F2F',pm:'F2F'}},
-  ozaki:    {1:{am:'OFF',pm:'F2F'},2:{am:'F2F',pm:'F2F'},3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'ET'},5:{am:'OFF',pm:'F2F'}},
-  pham:     {1:{am:'VV',pm:'OFF'}, 2:{am:'F2F',pm:'OFF'},3:{am:'IW',pm:'F2F'}, 4:{am:'F2F',pm:'ET'},5:{am:'F2F',pm:'F2F'}},
-  moghtader:{1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'F2F'},3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'ET'},5:{am:'F2F',pm:'F2F'}},
-  chen:     {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'},3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'VV'}, 5:{am:'F2F',pm:'VV'}},
-  kimm:     {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'},3:{am:'VV',pm:'OFF'},  4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'OFF'}},
-  bazargan: {1:{am:'AT',pm:'VV'},  2:{am:'F2F',pm:'AT'},3:{am:'AT',pm:'AT'},   4:{am:'F2F',pm:'AT'},5:{am:'F2F',pm:'AT'}},
-  green:    {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'},3:{am:'OFF',pm:'F2F'}, 4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'OFF'}},
+  bazargan: {1:{am:'AT', pm:'AT'}, 2:{am:'AT', pm:'AT'}, 3:{am:'AT', pm:'AT'}, 4:{am:'F2F',pm:'AT'}, 5:{am:'F2F',pm:'AT'}},
+  chen:     {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'VV'}, 5:{am:'F2F',pm:'VV'}},
+  dao:      {1:{am:'VV', pm:'OFF'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
+  fang:     {1:{am:'OFF',pm:'OFF'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'VV', pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
+  green:    {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'OFF',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'OFF'}},
+  kimm:     {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'OFF'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'OFF'}},
+  lagos:    {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
+  moghtader:{1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'F2F'},3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'ET'}, 5:{am:'F2F',pm:'F2F'}},
+  morales:  {1:{am:'F2F',pm:'OFF'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'OFF'},5:{am:'F2F',pm:'F2F'}},
+  nguyen:   {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'VV'}, 5:{am:'F2F',pm:'F2F'}},
+  nudell:   {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'OFF'},5:{am:'OFF',pm:'OFF'}},
+  ozaki:    {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'F2F'},3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'ET'}, 5:{am:'F2F',pm:'F2F'}},
+  pham:     {1:{am:'AT', pm:'OFF'},2:{am:'F2F',pm:'F2F'},3:{am:'OFF',pm:'IW'}, 4:{am:'F2F',pm:'ET'}, 5:{am:'F2F',pm:'F2F'}},
+  saeedian: {1:{am:'F2F',pm:'F2F'},2:{am:'VV', pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
+  siegel:   {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
+  zakka:    {1:{am:'F2F',pm:'AT'}, 2:{am:'IW', pm:'ET'}, 3:{am:'F2F',pm:'AT'}, 4:{am:'F2F',pm:'F2F'},5:{am:'IW', pm:'F2F'}},
 };
 
 const ALL_NPS = [
@@ -1130,7 +1145,7 @@ function VT_parseProviderFile(ab, filename) {
     } else i++;
   }
   const outDays=new Set(Object.entries(dayCodes).filter(([,c])=>c.size>0).map(([d])=>parseInt(d)));
-  return {name:providerName,month,year,outDays,dayCodes};
+  return {name:providerName,id:nameToId(providerName),month,year,outDays,dayCodes};
 }
 
 async function VT_processFiles() {
@@ -1165,6 +1180,47 @@ function VT_getAbsencesForDate(dateStr) {
     }
   });
   return out;
+}
+
+function VT_toggleBaseProfiles() {
+  const panel = document.getElementById('VT_bpPanel');
+  const isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) VT_renderBaseProfiles();
+}
+function VT_renderBaseProfiles() {
+  const cont = document.getElementById('VT_bpTable');
+  if (!cont) return;
+  const dayNums=[1,2,3,4,5];
+  const dayLabels=['Mon','Tue','Wed','Thu','Fri'];
+  const ids = Object.keys(WEEKLY_SHIFTS).sort();
+  // name lookup
+  const idToName={};
+  [...FT_ALL,{id:'dao',name:'Dao'},{id:'lagos',name:'Lagos'}].forEach(p=>idToName[p.id]=p.name||p.id);
+  let html=`<table style="border-collapse:collapse;font-size:11px;font-family:'DM Mono',monospace;min-width:500px;">
+    <thead><tr style="background:var(--navy);color:white;">
+      <th style="padding:5px 10px;text-align:left;">Physician</th>
+      ${dayLabels.map(d=>`<th style="padding:5px 12px;text-align:center;">${d}</th>`).join('')}
+    </tr></thead><tbody>`;
+  ids.forEach((id,ri)=>{
+    const bg = ri%2===0 ? 'var(--grey)' : 'white';
+    const name = idToName[id]||id;
+    html+=`<tr style="background:${bg}"><td style="padding:5px 10px;font-weight:500;">${name}</td>`;
+    dayNums.forEach(dow=>{
+      const ws=WEEKLY_SHIFTS[id]?.[dow];
+      if(ws){
+        const am=ws.am||'—', pm=ws.pm||'—';
+        const amColor=am==='F2F'?'var(--teal)':am==='OFF'||am==='---'?'var(--grey3)':'var(--amber)';
+        const pmColor=pm==='F2F'?'var(--teal)':pm==='ET'?'#1a56db':pm==='OFF'||pm==='---'?'var(--grey3)':'var(--amber)';
+        html+=`<td style="padding:4px 12px;text-align:center;"><span style="color:${amColor}">${am}</span><span style="color:var(--grey3);margin:0 2px;">/</span><span style="color:${pmColor}">${pm}</span></td>`;
+      } else {
+        html+=`<td style="padding:4px 12px;text-align:center;color:var(--grey3);">—</td>`;
+      }
+    });
+    html+='</tr>';
+  });
+  html+='</tbody></table>';
+  cont.innerHTML=html;
 }
 
 function VT_setDisplayMonth(m, y) {
@@ -1263,6 +1319,14 @@ function VT_renderResults() {
         return `<td><span class="code-pill ${pillClass}">${c}</span></td>`;
       }
       if(dd.hwInfo)return `<td><span class="code-pill hw">HW</span></td>`;
+      if(!dd.isWeekend&&p.id){
+        const ws=WEEKLY_SHIFTS[p.id]?.[dd.dow];
+        if(ws){
+          const am=ws.am||'',pm=ws.pm||'';
+          const label=(am&&pm&&am!==pm)?`${am}/${pm}`:(am||pm);
+          if(label)return `<td><span class="code-pill base" title="Base profile — no request on file">${label}</span></td>`;
+        }
+      }
       return '<td></td>';
     }).join('');
 

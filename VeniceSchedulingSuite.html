@@ -379,6 +379,7 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
   <button class="tab-bar-btn" onclick="switchTab('np')">👩‍⚕️ NP/PA Tracker</button>
   <button class="tab-bar-btn" onclick="switchTab('prelim')">🔍 Prelim Check</button>
   <button class="tab-bar-btn" onclick="switchTab('heatmap')">🌡️ Room Heatmap</button>
+  <button class="tab-bar-btn" onclick="switchTab('cal')">📆 Calendar</button>
 </nav>
 
 <!-- ═══════════════════════════════════════════════════════════
@@ -633,6 +634,26 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
     <div class="vt-rule-item"><span class="rule-badge hw">MOD 150</span><span>Bazargan-Lari · Ozaki · Pham · Moghtader</span></div>
   </div>
   <div id="HM_container"></div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TAB — CALENDAR VIEW
+═══════════════════════════════════════════════════════════ -->
+<div id="page-cal" class="page">
+<div class="main">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap;">
+    <h2 id="CAL_title" style="margin:0;font-size:18px;color:var(--navy);">Calendar</h2>
+    <div id="CAL_monthChips" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+  </div>
+  <div style="font-size:11px;color:var(--text2);margin-bottom:16px;display:flex;gap:16px;flex-wrap:wrap;">
+    <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#3b82f6;margin-right:4px;vertical-align:middle;"></span>VAC</span>
+    <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#8b5cf6;margin-right:4px;vertical-align:middle;"></span>LOA</span>
+    <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#f59e0b;margin-right:4px;vertical-align:middle;"></span>EL</span>
+    <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#10b981;margin-right:4px;vertical-align:middle;"></span>Rounding</span>
+    <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#6366f1;margin-right:4px;vertical-align:middle;"></span>Holiday Wheel</span>
+  </div>
+  <div id="CAL_grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;"></div>
 </div>
 </div>
 
@@ -1032,6 +1053,7 @@ function normalizeCode(val) {
   if(v==='OUT') return 'OUT';
   if(v==='VV'||v==='VIRTUAL') return 'VV';
   if(v.includes('SICK')||v==='SL') return 'SL';
+  if(v.includes('ROUND')) return 'ROUNDING';
   return null;
 }
 
@@ -1067,10 +1089,11 @@ function isHWPhysician(name) {
 function switchTab(tab) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab-bar-btn').forEach((b,i)=>
-    b.classList.toggle('active',['vt','ra','np','prelim','heatmap'][i]===tab));
+    b.classList.toggle('active',['vt','ra','np','prelim','heatmap','cal'][i]===tab));
   document.getElementById(`page-${tab}`).classList.add('active');
   if(tab==='ra') { RA_syncFromVT(); RA_render(); }
   if(tab==='heatmap') HM_render();
+  if(tab==='cal') CAL_render();
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1612,6 +1635,120 @@ function VT_exportUnified() {
   a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
   a.download = `VeniceSchedule_${year}_${String(month).padStart(2,'0')}.csv`;
   a.click();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CALENDAR VIEW (CAL_)
+// ══════════════════════════════════════════════════════════════════════════════
+const CAL_INCLUDE = new Set(['VAC','LOA','EL','OUT','ROUNDING']);
+const CAL_COLORS = {
+  VAC:'#3b82f6', LOA:'#8b5cf6', EL:'#f59e0b',
+  ROUNDING:'#10b981', OUT:'#ef4444', HW:'#6366f1'
+};
+
+let CAL_displayMonth = null, CAL_displayYear = null;
+
+function CAL_setMonth(m, y) {
+  CAL_displayMonth = m; CAL_displayYear = y; CAL_render();
+}
+
+function CAL_render() {
+  if (!VT_providerData.length) {
+    document.getElementById('CAL_grid').innerHTML =
+      '<div style="grid-column:1/-1;padding:40px;text-align:center;color:var(--text2);font-size:13px;">Load schedule files in the Vacation Tracker tab first.</div>';
+    document.getElementById('CAL_title').textContent = 'Calendar';
+    document.getElementById('CAL_monthChips').innerHTML = '';
+    return;
+  }
+
+  // Build month list from providerData
+  const monthSet = {};
+  VT_providerData.forEach(p => {
+    const key = `${p.year}-${String(p.month).padStart(2,'0')}`;
+    if (!monthSet[key]) monthSet[key] = {month: p.month, year: p.year};
+  });
+  const months = Object.values(monthSet).sort((a,b) => a.year!==b.year ? a.year-b.year : a.month-b.month);
+
+  if (!CAL_displayMonth || !monthSet[`${CAL_displayYear}-${String(CAL_displayMonth).padStart(2,'0')}`]) {
+    const latest = months[months.length-1];
+    CAL_displayMonth = latest.month; CAL_displayYear = latest.year;
+  }
+
+  const month = CAL_displayMonth, year = CAL_displayYear;
+
+  // Month chips
+  const chips = document.getElementById('CAL_monthChips');
+  chips.style.display = months.length > 1 ? 'flex' : 'none';
+  chips.innerHTML = months.map(({month:m,year:y}) => {
+    const label = new Date(y,m-1,1).toLocaleString('default',{month:'short',year:'numeric'});
+    const active = m===month && y===year;
+    return `<button onclick="CAL_setMonth(${m},${y})" style="padding:4px 12px;border-radius:20px;border:1px solid ${active?'var(--navy)':'var(--grey2)'};background:${active?'var(--navy)':'white'};color:${active?'white':'var(--text2)'};font-size:11px;cursor:pointer;font-family:'DM Mono',monospace;">${label}</button>`;
+  }).join('');
+
+  const monthName = new Date(year, month-1, 1).toLocaleString('default',{month:'long'});
+  document.getElementById('CAL_title').textContent = `${monthName} ${year}`;
+
+  const providers = VT_providerData.filter(p => p.month===month && p.year===year);
+  const numDays = new Date(year, month, 0).getDate();
+  const firstDow = new Date(year, month-1, 1).getDay(); // 0=Sun
+
+  const grid = document.getElementById('CAL_grid');
+
+  // Day-of-week headers
+  let html = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d =>
+    `<div style="text-align:center;font-size:11px;font-weight:600;color:var(--text2);padding:4px 0;letter-spacing:.05em;">${d}</div>`
+  ).join('');
+
+  // Empty cells before first day
+  for (let i = 0; i < firstDow; i++) {
+    html += '<div></div>';
+  }
+
+  for (let d = 1; d <= numDays; d++) {
+    const dow = new Date(year, month-1, d).getDay();
+    const isWeekend = dow === 0 || dow === 6;
+    const dk = dateKey(new Date(year, month-1, d));
+    const hwInfo = HW_DATES[dk];
+
+    // Collect entries to show
+    const entries = [];
+
+    // Holiday wheel physicians (pre-approved)
+    if (hwInfo) {
+      hwInfo.forEach(hw => entries.push({name: hw.name.split(/[,\s]+/)[0], code:'HW', color: CAL_COLORS.HW}));
+    }
+
+    // Provider schedule codes
+    providers.forEach(p => {
+      const codes = p.dayCodes[d];
+      if (!codes || codes.size === 0) return;
+      // Skip if already shown via HW
+      const nameShort = p.name.split(/[,\s]+/)[0];
+      const alreadyHW = hwInfo && hwInfo.some(h => h.name.toLowerCase().includes(nameShort.toLowerCase()));
+      if (alreadyHW) return;
+      const match = [...codes].find(c => CAL_INCLUDE.has(c));
+      if (match) entries.push({name: nameShort, code: match, color: CAL_COLORS[match] || '#6b7280'});
+    });
+
+    const bg = isWeekend ? 'var(--grey)' : hwInfo ? '#ede9fe' : 'white';
+    const border = hwInfo ? '1px solid #c4b5fd' : '1px solid var(--grey2)';
+    const minH = '80px';
+
+    const pillsHtml = entries.map(e =>
+      `<div style="display:flex;align-items:center;gap:3px;margin-top:2px;">
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${e.color};flex-shrink:0;"></span>
+        <span style="font-size:10px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${e.name} — ${e.code}">${e.name}</span>
+        <span style="font-size:9px;color:${e.color};font-weight:600;flex-shrink:0;">${e.code}</span>
+      </div>`
+    ).join('');
+
+    html += `<div style="background:${bg};border:${border};border-radius:6px;padding:5px 6px;min-height:${minH};box-sizing:border-box;${isWeekend?'opacity:.6':''}">
+      <div style="font-size:11px;font-weight:600;color:${isWeekend?'var(--text2)':'var(--navy)'};margin-bottom:2px;">${d}</div>
+      ${pillsHtml}
+    </div>`;
+  }
+
+  grid.innerHTML = html;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

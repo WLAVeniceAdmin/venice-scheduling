@@ -629,8 +629,8 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
 <div id="page-heatmap" class="page">
 <div class="main">
   <div class="vt-rules-banner" style="margin-bottom:18px;">
-    <div class="vt-rule-item"><span class="rule-badge ok">MOD 361</span><span>Siegel · Morales · Nudell · Zakka · Fang · Dao · Lagos</span></div>
-    <div class="vt-rule-item"><span class="rule-badge code">MOD 362</span><span>Saeedian · Nguyen · Chen · Kimm · Green · Wessel · Nori</span></div>
+    <div class="vt-rule-item"><span class="rule-badge ok">MOD 361</span><span>Siegel · Morales · Nudell · Zakka · Fang · Noori · Wessel (float)</span></div>
+    <div class="vt-rule-item"><span class="rule-badge code">MOD 362</span><span>Saeedian · Nguyen · Chen · Kimm · Green · Dao · Lagos</span></div>
     <div class="vt-rule-item"><span class="rule-badge hw">MOD 150</span><span>Bazargan-Lari · Ozaki · Pham · Moghtader</span></div>
   </div>
   <div id="HM_container"></div>
@@ -920,7 +920,7 @@ function FB_applySnapshot(d) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 const HOLIDAY_WHEEL = {
-  A: { name:'Thanksgiving', physicians:['bazargan','kimm','lagos','morales','pham'], dates: hwRange(2026,11,23,29) },
+  A: { name:'Thanksgiving', physicians:['bazargan','kimm','lagos','morales','pham'], dates: hwRange(2026,11,23,29) },  // Lagos now fixed in 362 but still on HW Group A
   B: { name:'Christmas',    physicians:['dao','fang','green','nguyen','nudell','ozaki'],                    dates: hwRange(2026,12,21,27) },
   C: { name:'New Year',     physicians:['chen','moghtader','saeedian','siegel','zakka'],         dates: [...hwRange(2026,12,28,31),...hwRange(2027,1,1,3)] }
 };
@@ -954,11 +954,11 @@ const FT_MAIN = [
   {id:'nguyen',   name:'Nguyen',       fullName:'Nguyen, L',       rooms:[13,14]},
   {id:'chen',     name:'Chen',         fullName:'Chen, A',         rooms:[23,24]},
   {id:'kimm',     name:'Kimm',         fullName:'Kimm, S',         rooms:[25,26]},
-  {id:'green',    name:'Green',        fullName:'Green, D',        rooms:[15,16]},  // moved from 150→362; rooms TBD (15-16 placeholder)
-  {id:'wessel',   name:'Wessel',       fullName:'Wessel',          rooms:[17,18]},  // new; rooms TBD (17-18 placeholder)
-  {id:'nori',     name:'Nori',         fullName:'Nori',            rooms:[21,22]},  // new; rooms TBD (21-22 placeholder)
+  {id:'green',    name:'Green',        fullName:'Green, D',        rooms:[]},       // TBD from Elene
+  {id:'dao',      name:'Dao',          fullName:'Dao, B',          rooms:[21,22]},  // fixed rooms — replaced Moghtader in 362
+  {id:'lagos',    name:'Lagos',        fullName:'Lagos, Y',        rooms:[15,16]},  // fixed rooms — replaced Ozaki in 362
 ];
-// MOD 150 — Family Medicine (Bazargan-Lari + FM physicians moved from 362)
+// MOD 150 — Family Medicine (Bazargan-Lari + FM physicians)
 // Room letters for Pham, Moghtader, Ozaki are TBD pending updated room chart from Elene
 const FT_MOD150 = [
   {id:'bazargan', name:'Bazargan-Lari',fullName:'Bazargan-Lari',   rooms:['M','N']},
@@ -969,8 +969,8 @@ const FT_MOD150 = [
 const FT_ALL = [...FT_MAIN, ...FT_MOD150];
 
 const FLOAT_SCHEDULE = {
-  dao: {
-    name:'Dao',
+  noori: {
+    name:'Noori',
     schedule:{
       1:{AM:{rooms:[],code:'VV'},PM:{rooms:[],code:'OFF'},EVE:null},
       2:{AM:{rooms:[7,8]},PM:{rooms:[],code:'ET'},EVE:null},
@@ -979,8 +979,8 @@ const FLOAT_SCHEDULE = {
       5:{AM:{rooms:[15,16]},PM:{rooms:[25,26]},EVE:null},
     }
   },
-  lagos: {
-    name:'Lagos',
+  wessel: {
+    name:'Wessel',
     schedule:{
       1:{AM:{rooms:[17,18]},PM:{rooms:[17,18]},EVE:null},
       2:{AM:{rooms:[11,12]},PM:{rooms:[],code:'ET'},EVE:null},
@@ -1010,6 +1010,8 @@ const WEEKLY_SHIFTS = {
   saeedian: {1:{am:'F2F',pm:'F2F'},2:{am:'VV', pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
   siegel:   {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
   zakka:    {1:{am:'F2F',pm:'AT'}, 2:{am:'IW', pm:'ET'}, 3:{am:'F2F',pm:'AT'}, 4:{am:'F2F',pm:'F2F'},5:{am:'IW', pm:'F2F'}},
+  noori:    {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
+  wessel:   {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
 };
 
 const ALL_NPS = [
@@ -1060,7 +1062,7 @@ function normalizeCode(val) {
 // Name → ID matching for cross-tab integration
 const NAME_ID_MAP = {};
 [...FT_ALL,
- {id:'dao',name:'Dao'},{id:'lagos',name:'Lagos'},
+ {id:'noori',name:'Noori'},{id:'wessel',name:'Wessel'},
  ...ALL_NPS
 ].forEach(p=>{
   NAME_ID_MAP[p.name.toLowerCase()] = p.id;
@@ -1237,7 +1239,7 @@ function VT_renderBaseProfiles() {
   const ids = Object.keys(WEEKLY_SHIFTS).sort();
   // name lookup
   const idToName={};
-  [...FT_ALL,{id:'dao',name:'Dao'},{id:'lagos',name:'Lagos'}].forEach(p=>idToName[p.id]=p.name||p.id);
+  [...FT_ALL,{id:'noori',name:'Noori'},{id:'wessel',name:'Wessel'}].forEach(p=>idToName[p.id]=p.name||p.id);
   let html=`<table style="border-collapse:collapse;font-size:11px;font-family:'DM Mono',monospace;min-width:500px;">
     <thead><tr style="background:var(--navy);color:white;">
       <th style="padding:5px 10px;text-align:left;">Physician</th>
@@ -1432,17 +1434,18 @@ const DOTD_ROSTER = [
   {id:'dao',      name:'Dao'},
   {id:'fang',     name:'Fang'},
   {id:'green',    name:'Green'},
-
   {id:'kimm',     name:'Kimm'},
   {id:'lagos',    name:'Lagos'},
   {id:'moghtader',name:'Moghtader'},
   {id:'morales',  name:'Morales'},
   {id:'nguyen',   name:'Nguyen'},
+  {id:'noori',    name:'Noori'},
   {id:'nudell',   name:'Nudell'},
   {id:'ozaki',    name:'Ozaki'},
   {id:'pham',     name:'Pham'},
   {id:'saeedian', name:'Saeedian'},
   {id:'siegel',   name:'Siegel'},
+  {id:'wessel',   name:'Wessel'},
   {id:'zakka',    name:'Zakka'},
 ];
 
@@ -1576,11 +1579,10 @@ function VT_exportUnified() {
   NP_providerData.forEach(p => npById[p.id] = p);
 
   const mdProviders = [
-    ...FT_MAIN.slice(0,6).map(p => ({...p, module:'Mod 361'})),
-    ...FT_MAIN.slice(6,12).map(p => ({...p, module:'Mod 362'})),
+    ...FT_MAIN.map(p => ({...p, module:'Mod 362'})),
     ...FT_MOD150.map(p => ({...p, module:'Mod 150'})),
-    {id:'dao',   name:'Dao',   fullName:'Dao, B',   rooms:[], module:'Float'},
-    {id:'lagos', name:'Lagos', fullName:'Lagos, Y',  rooms:[], module:'Float'},
+    {id:'noori',  name:'Noori',  fullName:'Noori',   rooms:[], module:'Float (361)'},
+    {id:'wessel', name:'Wessel', fullName:'Wessel',  rooms:[], module:'Float (361)'},
   ];
 
   const rows = [['Date','Day','DOTD AM','DOTD PM','MD Cap Count','MD Cap Status','NP Cap Status','Role','Provider','Module','Rooms','Absence Code','AM Type','PM Type']];
@@ -1827,7 +1829,7 @@ function RA_buildLegend() {
   const all=[
     ...FT_MAIN.map(p=>({...p,type:'ft'})),
     ...FT_MOD150.map(p=>({...p,type:'ft'})),
-    {id:'dao',name:'Dao',type:'float'},{id:'lagos',name:'Lagos',type:'float'},
+    {id:'noori',name:'Noori',type:'float'},{id:'wessel',name:'Wessel',type:'float'},
     ...ALL_NPS.filter(p=>p.capTracked).map(p=>({...p,type:'np'})),
   ];
   let html='',lastType='';
@@ -2114,7 +2116,7 @@ function RA_switchView(v,btn) {
 
 function RA_buildScenarioSelect() {
   const sel=document.getElementById('RA_scenarioProv');
-  const all=[...FT_ALL.map(p=>({id:p.id,name:p.name})),{id:'dao',name:'Dao'},{id:'lagos',name:'Lagos'},...ALL_NPS.map(p=>({id:p.id,name:p.name}))];
+  const all=[...FT_ALL.map(p=>({id:p.id,name:p.name})),{id:'noori',name:'Noori'},{id:'wessel',name:'Wessel'},...ALL_NPS.map(p=>({id:p.id,name:p.name}))];
   sel.innerHTML=`<option value="">— Select —</option>`+all.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
 }
 function RA_addScenarioAbsent() {
@@ -2342,20 +2344,20 @@ async function RA_exportDailySchedule() {
   // ── MODULE 362 — Internal Medicine ──
   addSectionHeader('Module 362', 'Ext 2441 & 3898');
   [
-    {id:'dao',      rooms:floatRooms('dao')||'(float)', fullName:'Dao, B'},
-    {id:'fang',     rooms:'9 & 10',                     fullName:'Fang, K'},
-    {id:'lagos',    rooms:floatRooms('lagos')||'(float)',fullName:'Lagos, Y'},
-    {id:'morales',  rooms:'2 & 3',                      fullName:'Morales, G'},
-    {id:'nudell',   rooms:'5 & 6',                      fullName:'Nudell, J'},
-    {id:'saeedian', rooms:'11 & 12',                    fullName:'Saeedian, J'},
-    {id:'siegel',   rooms:'1 & 4',                      fullName:'Siegel, J'},
-    {id:'zakka',    rooms:'7 & 8',                      fullName:'Zakka, K'},
-    {id:'chen',     rooms:'23 & 24',                    fullName:'Chen, A'},
-    {id:'green',    rooms:'TBD',                        fullName:'Green, D'},
-    {id:'kimm',     rooms:'25 & 26',                    fullName:'Kimm, S'},
-    {id:'nguyen',   rooms:'13 & 14',                    fullName:'Nguyen, L'},
-    {id:'nori',     rooms:'TBD',                        fullName:'Nori'},
-    {id:'wessel',   rooms:'TBD',                        fullName:'Wessel'},
+    {id:'siegel',   rooms:'1 & 4',                           fullName:'Siegel, J'},
+    {id:'morales',  rooms:'2 & 3',                           fullName:'Morales, G'},
+    {id:'nudell',   rooms:'5 & 6',                           fullName:'Nudell, J'},
+    {id:'zakka',    rooms:'7 & 8',                           fullName:'Zakka, K'},
+    {id:'fang',     rooms:'9 & 10',                          fullName:'Fang, K'},
+    {id:'saeedian', rooms:'11 & 12',                         fullName:'Saeedian, J'},
+    {id:'nguyen',   rooms:'13 & 14',                         fullName:'Nguyen, L'},
+    {id:'lagos',    rooms:'15 & 16',                         fullName:'Lagos, Y'},
+    {id:'green',    rooms:'TBD',                             fullName:'Green, D'},
+    {id:'dao',      rooms:'21 & 22',                         fullName:'Dao, B'},
+    {id:'chen',     rooms:'23 & 24',                         fullName:'Chen, A'},
+    {id:'kimm',     rooms:'25 & 26',                         fullName:'Kimm, S'},
+    {id:'noori',    rooms:floatRooms('noori')||'(float)',     fullName:'Noori'},
+    {id:'wessel',   rooms:floatRooms('wessel')||'(float)',    fullName:'Wessel'},
   ].forEach((p,i) => addMDRow(p.rooms, p.id, p.fullName, i));
 
   addBlankRow();
@@ -2607,7 +2609,7 @@ const PRELIM_NAME_MAP = {
   'MOGHTADER':'moghtader','OZAKI':'ozaki','PHAM':'pham',
   'BAZARGAN-LARI':'bazargan','BAZARGAN':'bazargan',
   'CHEN':'chen','DAO':'dao','FANG':'fang','GREEN':'green',
-  'KIMM':'kimm','LAGOS':'lagos','MORALES':'morales',
+  'KIMM':'kimm','LAGOS':'lagos','MORALES':'morales','NOORI':'noori','WESSEL':'wessel',
   'NGUYEN':'nguyen','NUDELL':'nudell','SAEEDIAN':'saeedian',
   'SIEGEL':'siegel','ZAKKA':'zakka',
 };
@@ -2971,23 +2973,23 @@ RA_init();
 // ROOM HEATMAP (HM_)
 // ══════════════════════════════════════════════════════════════════════════════
 const HM_MODULES = [
-  {label:'MOD 361 — Internal Medicine', color:'#185fa5', physicians:[
-    {id:'siegel',  label:'Siegel',  rooms:'1 & 4'},
-    {id:'morales', label:'Morales', rooms:'2 & 3'},
-    {id:'nudell',  label:'Nudell',  rooms:'5 & 6'},
-    {id:'zakka',   label:'Zakka',   rooms:'7 & 8'},
-    {id:'fang',    label:'Fang',    rooms:'9 & 10'},
-    {id:'dao',     label:'Dao',     rooms:'float'},
-    {id:'lagos',   label:'Lagos',   rooms:'float'},
+  {label:'MOD 361 — Internal Medicine (+ Floats)', color:'#185fa5', physicians:[
+    {id:'siegel',  label:'Siegel',    rooms:'1 & 4'},
+    {id:'morales', label:'Morales',   rooms:'2 & 3'},
+    {id:'nudell',  label:'Nudell',    rooms:'5 & 6'},
+    {id:'zakka',   label:'Zakka',     rooms:'7 & 8'},
+    {id:'fang',    label:'Fang',      rooms:'9 & 10'},
+    {id:'noori',   label:'Noori ★',   rooms:'float'},
+    {id:'wessel',  label:'Wessel ★',  rooms:'float'},
   ]},
   {label:'MOD 362 — Internal Medicine', color:'#1baf7a', physicians:[
     {id:'saeedian', label:'Saeedian', rooms:'11 & 12'},
     {id:'nguyen',   label:'Nguyen',   rooms:'13 & 14'},
+    {id:'lagos',    label:'Lagos',    rooms:'15 & 16'},
+    {id:'green',    label:'Green',    rooms:'TBD'},
+    {id:'dao',      label:'Dao',      rooms:'21 & 22'},
     {id:'chen',     label:'Chen',     rooms:'23 & 24'},
     {id:'kimm',     label:'Kimm',     rooms:'25 & 26'},
-    {id:'green',    label:'Green',    rooms:'TBD'},
-    {id:'wessel',   label:'Wessel ★', rooms:'TBD'},
-    {id:'nori',     label:'Nori ★',   rooms:'TBD'},
   ]},
   {label:'MOD 150 — Family Medicine (+ Bazargan-Lari / IM)', color:'#eb6834', physicians:[
     {id:'bazargan',  label:'Bazargan-Lari', rooms:'M & N'},

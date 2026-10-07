@@ -629,8 +629,8 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
 <div id="page-heatmap" class="page">
 <div class="main">
   <div class="vt-rules-banner" style="margin-bottom:18px;">
-    <div class="vt-rule-item"><span class="rule-badge ok">MOD 361</span><span>Siegel · Morales · Nudell · Zakka · Fang · Noori · Wessel (float)</span></div>
-    <div class="vt-rule-item"><span class="rule-badge code">MOD 362</span><span>Saeedian · Nguyen · Chen · Kimm · Green · Dao · Lagos</span></div>
+    <div class="vt-rule-item"><span class="rule-badge ok">MOD 361</span><span>Siegel · Morales · Nudell · Zakka · Fang · Saeedian · Noori · Wessel (float)</span></div>
+    <div class="vt-rule-item"><span class="rule-badge code">MOD 362</span><span>Nguyen · Lagos · Green · Dao · Chen · Kimm</span></div>
     <div class="vt-rule-item"><span class="rule-badge hw">MOD 150</span><span>Bazargan-Lari · Ozaki · Pham · Moghtader</span></div>
   </div>
   <div id="HM_container"></div>
@@ -943,20 +943,21 @@ function dateKey(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart
 const HW_DATES={};
 Object.entries(HOLIDAY_WHEEL).forEach(([g,info])=>info.dates.forEach(dk=>{if(!HW_DATES[dk])HW_DATES[dk]=[];HW_DATES[dk].push({group:g,name:info.name});}));
 
-// FT Physicians — MOD 362 (Internal Medicine)
+// FT Physicians — MOD 361 + 362 (Internal Medicine)
+// MOD 361: Siegel, Morales, Nudell, Zakka, Fang, Saeedian  |  MOD 362: Nguyen, Chen, Kimm, Green, Dao, Lagos
 const FT_MAIN = [
   {id:'siegel',   name:'Siegel',       fullName:'Siegel, J',       rooms:[1,4]},
   {id:'morales',  name:'Morales',      fullName:'Morales, G',      rooms:[2,3]},
   {id:'nudell',   name:'Nudell',       fullName:'Nudell, J',       rooms:[5,6]},
   {id:'zakka',    name:'Zakka',        fullName:'Zakka, K',        rooms:[7,8]},
   {id:'fang',     name:'Fang',         fullName:'Fang, K',         rooms:[9,10]},
-  {id:'saeedian', name:'Saeedian',     fullName:'Saeedian, J',     rooms:[11,12]},
+  {id:'saeedian', name:'Saeedian',     fullName:'Saeedian, J',     rooms:[11,12]},  // MOD 361
   {id:'nguyen',   name:'Nguyen',       fullName:'Nguyen, L',       rooms:[13,14]},
+  {id:'lagos',    name:'Lagos',        fullName:'Lagos, Y',        rooms:[15,16]},  // fixed — replaced Ozaki in 362
+  {id:'green',    name:'Green',        fullName:'Green, D',        rooms:[17,18]},  // confirmed
+  {id:'dao',      name:'Dao',          fullName:'Dao, B',          rooms:[21,22]},  // fixed — replaced Moghtader in 362
   {id:'chen',     name:'Chen',         fullName:'Chen, A',         rooms:[23,24]},
   {id:'kimm',     name:'Kimm',         fullName:'Kimm, S',         rooms:[25,26]},
-  {id:'green',    name:'Green',        fullName:'Green, D',        rooms:[]},       // TBD from Elene
-  {id:'dao',      name:'Dao',          fullName:'Dao, B',          rooms:[21,22]},  // fixed rooms — replaced Moghtader in 362
-  {id:'lagos',    name:'Lagos',        fullName:'Lagos, Y',        rooms:[15,16]},  // fixed rooms — replaced Ozaki in 362
 ];
 // MOD 150 — Family Medicine (Bazargan-Lari + FM physicians)
 // Room letters for Pham, Moghtader, Ozaki are TBD pending updated room chart from Elene
@@ -2352,7 +2353,7 @@ async function RA_exportDailySchedule() {
     {id:'saeedian', rooms:'11 & 12',                         fullName:'Saeedian, J'},
     {id:'nguyen',   rooms:'13 & 14',                         fullName:'Nguyen, L'},
     {id:'lagos',    rooms:'15 & 16',                         fullName:'Lagos, Y'},
-    {id:'green',    rooms:'TBD',                             fullName:'Green, D'},
+    {id:'green',    rooms:'17 & 18',                         fullName:'Green, D'},
     {id:'dao',      rooms:'21 & 22',                         fullName:'Dao, B'},
     {id:'chen',     rooms:'23 & 24',                         fullName:'Chen, A'},
     {id:'kimm',     rooms:'25 & 26',                         fullName:'Kimm, S'},
@@ -2974,22 +2975,22 @@ RA_init();
 // ══════════════════════════════════════════════════════════════════════════════
 const HM_MODULES = [
   {label:'MOD 361 — Internal Medicine (+ Floats)', color:'#185fa5', physicians:[
-    {id:'siegel',  label:'Siegel',    rooms:'1 & 4'},
-    {id:'morales', label:'Morales',   rooms:'2 & 3'},
-    {id:'nudell',  label:'Nudell',    rooms:'5 & 6'},
-    {id:'zakka',   label:'Zakka',     rooms:'7 & 8'},
-    {id:'fang',    label:'Fang',      rooms:'9 & 10'},
-    {id:'noori',   label:'Noori ★',   rooms:'float'},
-    {id:'wessel',  label:'Wessel ★',  rooms:'float'},
+    {id:'siegel',   label:'Siegel',    rooms:'1 & 4'},
+    {id:'morales',  label:'Morales',   rooms:'2 & 3'},
+    {id:'nudell',   label:'Nudell',    rooms:'5 & 6'},
+    {id:'zakka',    label:'Zakka',     rooms:'7 & 8'},
+    {id:'fang',     label:'Fang',      rooms:'9 & 10'},
+    {id:'saeedian', label:'Saeedian',  rooms:'11 & 12'},
+    {id:'noori',    label:'Noori ★',   rooms:'float'},
+    {id:'wessel',   label:'Wessel ★',  rooms:'float'},
   ]},
   {label:'MOD 362 — Internal Medicine', color:'#1baf7a', physicians:[
-    {id:'saeedian', label:'Saeedian', rooms:'11 & 12'},
-    {id:'nguyen',   label:'Nguyen',   rooms:'13 & 14'},
-    {id:'lagos',    label:'Lagos',    rooms:'15 & 16'},
-    {id:'green',    label:'Green',    rooms:'TBD'},
-    {id:'dao',      label:'Dao',      rooms:'21 & 22'},
-    {id:'chen',     label:'Chen',     rooms:'23 & 24'},
-    {id:'kimm',     label:'Kimm',     rooms:'25 & 26'},
+    {id:'nguyen',   label:'Nguyen',    rooms:'13 & 14'},
+    {id:'lagos',    label:'Lagos',     rooms:'15 & 16'},
+    {id:'green',    label:'Green',     rooms:'17 & 18'},
+    {id:'dao',      label:'Dao',       rooms:'21 & 22'},
+    {id:'chen',     label:'Chen',      rooms:'23 & 24'},
+    {id:'kimm',     label:'Kimm',      rooms:'25 & 26'},
   ]},
   {label:'MOD 150 — Family Medicine (+ Bazargan-Lari / IM)', color:'#eb6834', physicians:[
     {id:'bazargan',  label:'Bazargan-Lari', rooms:'M & N'},

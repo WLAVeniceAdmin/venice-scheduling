@@ -960,12 +960,11 @@ const FT_MAIN = [
   {id:'kimm',     name:'Kimm',         fullName:'Kimm, S',         rooms:[25,26]},
 ];
 // MOD 150 — Family Medicine (Bazargan-Lari + FM physicians)
-// Room letters for Pham, Moghtader, Ozaki are TBD pending updated room chart from Elene
 const FT_MOD150 = [
-  {id:'bazargan', name:'Bazargan-Lari',fullName:'Bazargan-Lari',   rooms:['M','N']},
-  {id:'ozaki',    name:'Ozaki',        fullName:'Ozaki, R',        rooms:['O','P']},   // TBD
-  {id:'pham',     name:'Pham',         fullName:'Pham, A',         rooms:['Q','R']},   // TBD
-  {id:'moghtader',name:'Moghtader',    fullName:'Moghtader, S',    rooms:['S','T']},   // TBD
+  {id:'bazargan', name:'Bazargan-Lari',fullName:'Bazargan-Lari',   rooms:['Q','L']},
+  {id:'ozaki',    name:'Ozaki',        fullName:'Ozaki, R',        rooms:['M','N']},
+  {id:'pham',     name:'Pham',         fullName:'Pham, A',         rooms:['R','S']},
+  {id:'moghtader',name:'Moghtader',    fullName:'Moghtader, S',    rooms:['O','P']},
 ];
 const FT_ALL = [...FT_MAIN, ...FT_MOD150];
 
@@ -2366,10 +2365,10 @@ async function RA_exportDailySchedule() {
   // ── MODULE 150 — Family Medicine ──
   addSectionHeader('Module 150 — FM', 'Ext 6744', 'Other Assignment');
   [
-    {id:'bazargan',  rooms:'M & N', fullName:'Bazargan-Lari'},
-    {id:'ozaki',     rooms:'TBD',   fullName:'Ozaki, R'},
-    {id:'pham',      rooms:'TBD',   fullName:'Pham, A'},
-    {id:'moghtader', rooms:'TBD',   fullName:'Moghtader, S'},
+    {id:'bazargan',  rooms:'Q & L', fullName:'Bazargan-Lari'},
+    {id:'ozaki',     rooms:'M & N', fullName:'Ozaki, R'},
+    {id:'pham',      rooms:'R & S', fullName:'Pham, A'},
+    {id:'moghtader', rooms:'O & P', fullName:'Moghtader, S'},
   ].forEach((p,i) => addMDRow(p.rooms, p.id, p.fullName, i));
 
   addBlankRow();
@@ -2993,10 +2992,10 @@ const HM_MODULES = [
     {id:'kimm',     label:'Kimm',      rooms:'25 & 26'},
   ]},
   {label:'MOD 150 — Family Medicine (+ Bazargan-Lari / IM)', color:'#eb6834', physicians:[
-    {id:'bazargan',  label:'Bazargan-Lari', rooms:'M & N'},
-    {id:'ozaki',     label:'Ozaki',         rooms:'TBD'},
-    {id:'pham',      label:'Pham',          rooms:'TBD'},
-    {id:'moghtader', label:'Moghtader',     rooms:'TBD'},
+    {id:'bazargan',  label:'Bazargan-Lari', rooms:'Q & L'},
+    {id:'ozaki',     label:'Ozaki',         rooms:'M & N'},
+    {id:'pham',      label:'Pham',          rooms:'R & S'},
+    {id:'moghtader', label:'Moghtader',     rooms:'O & P'},
   ]},
 ];
 

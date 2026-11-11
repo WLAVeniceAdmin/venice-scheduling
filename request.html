@@ -42,6 +42,10 @@ textarea{width:100%;min-height:70px;resize:vertical;}
 .day{border:1px solid var(--grey2);border-radius:8px;padding:6px 8px;min-height:84px;background:#fff;}
 .day.blank{background:transparent;border:none;}
 .day.hasreq{background:var(--red-lt);border-color:#f5b8b8;}
+.day.changed{background:var(--amber-lt);border-color:#f0d090;}
+.day.closed{background:var(--grey);color:var(--grey3);}
+.day.closed .c{font-size:11px;font-family:'DM Mono',monospace;margin-top:14px;text-align:center;}
+.sess select.chg{font-weight:700;border-color:var(--navy);}
 .day .n{font-size:12px;font-weight:600;color:var(--navy);margin-bottom:4px;}
 .sess{display:flex;align-items:center;gap:6px;margin-top:3px;}
 .sess span{font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);width:20px;}
@@ -65,6 +69,7 @@ textarea{width:100%;min-height:70px;resize:vertical;}
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="shared-data.js"></script>
 <script>
 // Must match FIREBASE_CONFIG in the scheduling suite.
 const FIREBASE_CONFIG = {
@@ -76,9 +81,15 @@ const FIREBASE_CONFIG = {
   appId: "1:926486683805:web:5b718832e0292f6fa57474"
 };
 
-// Codes offered in the dropdowns. Blank = regular schedule (base profile).
+// Codes for requesting time away (used by the date-range tool).
 // The suite counts VAC, EL, LOA toward the cap; VV, SL, ROUNDING, OUT are shown but not capped.
 const CODES = ['VAC','EL','LOA','SL','VV','ROUNDING','OUT'];
+// Everything offered in the half-day dropdowns: regular session types first, then time away.
+const ALL_CODES = ['F2F','VV','ET','AT','IW','OFF','VAC','EL','LOA','SL','ROUNDING','OUT'];
+const ABSENCE = new Set(['VAC','EL','LOA','SL','OUT']);
+// Regular schedule for a weekday session, from shared-data.js ('' if none, e.g. NP/PAs)
+function baseCode(dow, s){ return ((typeof WEEKLY_SHIFTS!=='undefined' && WEEKLY_SHIFTS[PID]?.[dow]) || {})[s] || ''; }
+function isClosed(y,m,d){ return typeof CLINIC_HOLIDAYS!=='undefined' && CLINIC_HOLIDAYS.has(`${y}-${pad(m)}-${pad(d)}`); }
 const CODE_LABELS = {VAC:'VAC – vacation',EL:'EL – education leave',LOA:'LOA – leave of absence',
   SL:'SL – sick leave',VV:'VV – virtual visit',ROUNDING:'Rounding',OUT:'Out (other)'};
 
@@ -192,13 +203,16 @@ function render(){
     const dow = new Date(y,m-1,d).getDay();
     if(dow===0||dow===6) continue;
     if(!started){ for(let i=1;i<dow;i++) cells += '<div class="day blank"></div>'; started = true; }
+    if(isClosed(y,m,d)){ cells += `<div class="day closed"><div class="n">${d}</div><div class="c">Clinic closed</div></div>`; continue; }
     const s = reqData.sessions[d] || {};
-    const has = s.am || s.pm;
-    const opt = v => `<option value="">—</option>` + CODES.map(c=>`<option value="${c}"${v===c?' selected':''}>${c}</option>`).join('');
-    cells += `<div class="day${has?' hasreq':''}" id="day-${d}">
-      <div class="n">${d}</div>
-      <div class="sess"><span>AM</span><select data-d="${d}" data-s="am">${opt(s.am)}</select></div>
-      <div class="sess"><span>PM</span><select data-d="${d}" data-s="pm">${opt(s.pm)}</select></div>
+    const sessHtml = key => {
+      const base = baseCode(dow, key), chosen = s[key] || '', shown = chosen || base;
+      const opts = (base ? '' : `<option value="">—</option>`) +
+        ALL_CODES.map(c=>`<option value="${c}"${shown===c?' selected':''}>${c}${c===base?' (regular)':''}</option>`).join('');
+      return `<div class="sess"><span>${key.toUpperCase()}</span><select data-d="${d}" data-s="${key}" data-base="${base}"${chosen?' class="chg"':''}>${opts}</select></div>`;
+    };
+    cells += `<div class="day ${dayClass(s)}" id="day-${d}">
+      <div class="n">${d}</div>${sessHtml('am')}${sessHtml('pm')}
     </div>`;
   }
 
@@ -207,7 +221,7 @@ function render(){
   app.innerHTML = `
     <div class="card">
       <h2>${who.name || PID}</h2>
-      <div class="sub">Pick the month, mark the sessions you need off, then press <b>Submit</b>. Leave a session as “—” if you're working your regular schedule.</div>
+      <div class="sub">Each half day starts with your regular schedule. Change only the sessions that are different this month, then press <b>Submit</b>. Changed days turn <span style="color:var(--red)">red</span> for time away and <span style="color:var(--amber)">amber</span> for other changes.</div>
       <div class="chips">${months.map(o=>`<button class="chip${o.y===y&&o.m===m?' active':''}" onclick="selectMonth(${o.y},${o.m})">${monthLabel(o.y,o.m)}</button>`).join('')}</div>
       ${statusHtml}
     </div>
@@ -218,7 +232,7 @@ function render(){
       <div class="range">
         <div><label>From</label><input type="date" id="rFrom" min="${minD}" max="${maxD}"></div>
         <div><label>To</label><input type="date" id="rTo" min="${minD}" max="${maxD}"></div>
-        <div><label>Code</label><select id="rCode">${CODES.map(c=>`<option value="${c}">${CODE_LABELS[c]}</option>`).join('')}<option value="">Clear (regular schedule)</option></select></div>
+        <div><label>Code</label><select id="rCode">${CODES.map(c=>`<option value="${c}">${CODE_LABELS[c]}</option>`).join('')}<option value="">Back to regular schedule</option></select></div>
         <button class="btn secondary" onclick="applyRange()">Apply</button>
       </div>
     </div>
@@ -226,7 +240,7 @@ function render(){
     <div class="card">
       <h2>${monthLabel(y,m)}</h2>
       <div class="grid-wrap"><div class="grid">${cells}</div></div>
-      <div class="legend">Weekends are not shown. Clinic holidays don't need to be entered.</div>
+      <div class="legend">Weekends are not shown. “(regular)” marks your usual session type.</div>
     </div>
 
     <div class="card">
@@ -243,9 +257,11 @@ function render(){
   app.querySelectorAll('select[data-d]').forEach(el=>el.addEventListener('change',e=>{
     const d = e.target.dataset.d, s = e.target.dataset.s;
     if(!reqData.sessions[d]) reqData.sessions[d] = {};
-    reqData.sessions[d][s] = e.target.value;
-    const cur = reqData.sessions[d];
-    document.getElementById(`day-${d}`).classList.toggle('hasreq', !!(cur.am||cur.pm));
+    // Store only differences from the regular schedule
+    const v = e.target.value === e.target.dataset.base ? '' : e.target.value;
+    reqData.sessions[d][s] = v;
+    e.target.classList.toggle('chg', !!v);
+    document.getElementById(`day-${d}`).className = 'day ' + dayClass(reqData.sessions[d]);
   }));
 }
 
@@ -257,11 +273,17 @@ function applyRange(){
   const {y,m} = sel;
   for(let d=Math.min(a,b); d<=Math.max(a,b); d++){
     const dow = new Date(y,m-1,d).getDay();
-    if(dow===0||dow===6) continue;
-    reqData.sessions[d] = {am:code, pm:code};
+    if(dow===0||dow===6||isClosed(y,m,d)) continue;
+    reqData.sessions[d] = {am: code===baseCode(dow,'am')?'':code, pm: code===baseCode(dow,'pm')?'':code};
   }
   reqData.notes = document.getElementById('notes').value;
   render();
+}
+
+function dayClass(s){
+  const v = [s.am, s.pm].filter(Boolean);
+  if(v.some(c=>ABSENCE.has(c))) return 'hasreq';
+  return v.length ? 'changed' : '';
 }
 
 function setMsg(t, err){ const el=document.getElementById('msg'); if(el){ el.textContent=t; el.className='msg '+(err?'err':'ok'); } }

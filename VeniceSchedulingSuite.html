@@ -1537,7 +1537,7 @@ function VT_exportUnified() {
     {id:'wessel', name:'Wessel', fullName:'Wessel',  rooms:[], module:'Float (361)'},
   ];
 
-  const rows = [['Date','Day','DOTD AM','DOTD PM','MD Cap Count','MD Cap Status','NP Cap Status','Role','Provider','Module','Rooms','Absence Code','AM Type','PM Type']];
+  const rows = [['Date','Day','DOTD AM','DOTD PM','MD/DO Cap Count','MD/DO Cap Status','NP Cap Status','Role','Provider','Module','Rooms','Absence Code','AM Type','PM Type']];
 
   for (let day = 1; day <= numDays; day++) {
     const dow = new Date(year, month-1, day).getDay();
@@ -1568,7 +1568,7 @@ function VT_exportUnified() {
       }
       const rooms = Array.isArray(p.rooms) && p.rooms.length ? p.rooms.join(' & ') : '';
       rows.push([dateStr, dayName, dotdAM, dotdPM, isWeekend ? '' : mdCapCount, mdCapStatus, npCapStatus,
-        'MD', p.fullName || p.name, p.module, rooms, codes, amType, pmType]);
+        'MD/DO', p.fullName || p.name, p.module, rooms, codes, amType, pmType]);
     }
 
     for (const p of ALL_NPS) {
@@ -3195,7 +3195,7 @@ function REQ_renderPanel() {
     const notes = r && r.notes ? `<span title="${r.notes.replace(/"/g,'&quot;')}" style="cursor:help">📝</span>` : '';
     return `<tr style="border-bottom:1px solid var(--grey2);">
       <td style="padding:6px 10px;font-weight:500;">${p.name}</td>
-      <td style="padding:6px 10px;font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;">${p.role === 'np' ? 'NP/PA' : 'MD'}</td>
+      <td style="padding:6px 10px;font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;">${p.role === 'np' ? 'NP/PA' : 'MD/DO'}</td>
       <td style="padding:6px 10px;font-size:12px;">${status}</td>
       <td style="padding:6px 10px;font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;">${when}</td>
       <td style="padding:6px 10px;font-size:11px;font-family:'DM Mono',monospace;">${days} ${notes}</td>

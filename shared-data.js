@@ -19,6 +19,7 @@ const CLINIC_HOLIDAYS = new Set([
 
 // Base weekly schedule profiles — sourced from physician profile docs (physician profiles folder).
 // Keys: 1=Mon … 5=Fri. Used as fallback when a monthly schedule day is blank.
+// OB = Obesity Medicine in MOD 150 (frees the physician's own Venice rooms).
 // eve:'F2F' = 5–7pm evening clinic that day (only physicians who do evenings have it).
 const WEEKLY_SHIFTS = {
   bazargan: {1:{am:'AT', pm:'AT'}, 2:{am:'AT', pm:'AT'}, 3:{am:'AT', pm:'AT'}, 4:{am:'F2F',pm:'AT'}, 5:{am:'F2F',pm:'AT'}},
@@ -27,7 +28,7 @@ const WEEKLY_SHIFTS = {
   fang:     {1:{am:'OFF',pm:'OFF'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'VV', pm:'F2F'},5:{am:'F2F',pm:'F2F'}},  // profile checked (file May 2026), matches
   green:    {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'OFF',pm:'F2F'},4:{am:'F2F',pm:'OFF'},5:{am:'F2F',pm:'IW'}},
   kimm:     {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'OFF'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'OFF'}},
-  lagos:    {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'F2F'},3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'OFF'},5:{am:'F2F',pm:'OFF'}},  // profile Oct 2026: Wed PM Obesity Med (WLA); ET 1 Tue PM/month
+  lagos:    {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'F2F'},3:{am:'F2F',pm:'OB'}, 4:{am:'F2F',pm:'OFF'},5:{am:'F2F',pm:'OFF'}},  // profile Oct 2026: Wed PM Obesity Med in MOD 150; ET 1 Tue PM/month
   moghtader:{1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'F2F'},3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'ET'}, 5:{am:'F2F',pm:'F2F'}},
   morales:  {1:{am:'F2F',pm:'OFF'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'OFF'},5:{am:'F2F',pm:'F2F'}},
   nguyen:   {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'VV'}, 5:{am:'F2F',pm:'F2F'}},

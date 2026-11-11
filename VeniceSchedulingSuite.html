@@ -971,6 +971,8 @@ const MOD361_IDS = new Set(['siegel','morales','nudell','zakka','fang','saeedian
 let SESSION_OVERRIDES = {};
 // Codes that mean the physician is not in clinic at all for that session
 const ABSENT_SESSION_CODES = new Set(['VAC','EL','LOA','SL','OUT']);
+// OB = working Obesity Medicine in MOD 150 that session (own Venice rooms are free)
+const SESSION_LABELS = {OB:'In MOD 150 (Obesity Med)', VV:'📱 VV'};
 // What a physician is actually doing in a session: their online-request change if any, else base schedule.
 // dk = 'YYYY-MM-DD', sess = 'am' | 'pm'
 function sessionShift(id, dk, sess){
@@ -1912,7 +1914,7 @@ function RA_renderFTRoom(r, absentSet, dow) {
     provTag=`<div class="provider-tag out">✗ ${provider.name}</div>`;
     if(floatUsing)provTag+=`<div class="provider-tag float" style="margin-top:2px;font-size:11px;">↪ ${floatUsing}</div>`;
   } else if(roomFree) {
-    const label=shift==='VV'?'📱 VV':shift;
+    const label=SESSION_LABELS[shift]||shift;
     provTag=`<div class="provider-tag vv-tag">${provider.name}</div><div class="session-code">${label} (room free)</div>`;
     if(floatUsing)provTag+=`<div class="provider-tag float" style="margin-top:2px;font-size:11px;">↪ ${floatUsing}</div>`;
   } else if(floatUsing) {
@@ -2018,9 +2020,14 @@ function RA_renderModules(containerId, absentSet) {
     <div class="session-code">Bariatrics</div>
   </div>`).join('');
 
+  const obVisitorCards=FT_MAIN.filter(p=>!absentSet.has(p.id)&&RA_getShift(p.id,dow)==='OB').map(p=>`<div class="room-card">
+    <div class="room-num">Obesity Med</div>
+    <div class="provider-tag ft">${p.name}</div>
+    <div class="session-code">Obesity Med · from Rm ${p.rooms.join(' & ')}</div>
+  </div>`).join('');
   const mod150HTML=`<div class="module-section" style="margin-top:20px">
     <div class="module-section-header mod150"><span>MOD 150 — APC (M,N,O,P,R,S) &amp; Obesity Med (L,Q)</span></div>
-    <div class="rooms-grid" style="grid-template-columns:repeat(4,1fr)">${mod150Cards}${obesityCards}</div>
+    <div class="rooms-grid" style="grid-template-columns:repeat(4,1fr)">${mod150Cards}${obesityCards}${obVisitorCards}</div>
   </div>
   <div class="module-section" style="margin-top:20px">
     <div class="module-section-header bariatrics"><span>MOD 150 — BARIATRICS (Rooms 1, 2)</span></div>
@@ -2045,7 +2052,7 @@ function RA_renderModules(containerId, absentSet) {
       if(!open)return;
       const rooms=p.rooms.filter(r=>!floatTaken.has(String(r))&&!OBESITY_ROOMS[r]);
       if(!rooms.length)return;
-      const why=out?'out':shift;
+      const why=out?'out':(shift==='OB'?'in MOD 150':shift);
       chips.push(`<div class="avail-chip" title="${p.name} — ${why}">Rm ${rooms.join(' & ')} <span style="font-weight:400;opacity:.75">· ${p.name} ${why}</span></div>`);
     });
     if(chips.length)openGroups.push(`<div style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);margin:8px 0 4px;">${label}</div><div class="avail-chips">${chips.join('')}</div>`);
@@ -2411,6 +2418,16 @@ async function RA_exportDailySchedule() {
     {id:'pham',      rooms:'R & S', fullName:'Pham, A'},
     {id:'moghtader', rooms:'O & P', fullName:'Moghtader, S'},
   ].forEach((p,i) => addMDRow(p.rooms, p.id, p.fullName, i));
+  // Venice-main physicians working Obesity Medicine in MOD 150 today (only the OB sessions shown)
+  FT_MAIN.forEach(p => {
+    const v = cellVal(p.id);
+    if (v.am !== 'OB' && v.pm !== 'OB') return;
+    addMDRow('Obesity Med', p.id, `${p.fullName} (Obesity Med)`, 4);
+    const r = sh.getRow(rn);
+    if (v.am !== 'OB') r.getCell(4).value = '';
+    if (v.pm !== 'OB') r.getCell(5).value = '';
+    r.getCell(6).value = '';
+  });
 
   addBlankRow();
 
@@ -3058,6 +3075,7 @@ function HM_render() {
     if(c==='VV')return 'background:#e6f1fb;color:#185fa5;border:1px solid #b5d4f4';
     if(c==='AT')return 'background:#faeeda;color:#854f0b;border:1px solid #fac775';
     if(c==='ET')return 'background:#eaf3de;color:#3b6d11;border:1px solid #c0dd97';
+    if(c==='OB')return 'background:var(--purple-lt);color:var(--purple);border:1px solid #d4b8f5';
     if(c==='IW')return 'background:#fbeaf0;color:#72243e;border:1px solid #f4c0d1';
     return 'background:var(--grey);color:var(--grey3)';
   }

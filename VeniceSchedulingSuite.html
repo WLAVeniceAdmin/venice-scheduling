@@ -3102,5 +3102,193 @@ function HM_render() {
 
 FB_init();
 </script>
+<script>
+// ══════════════════════════════════════════════════════════════════════════════
+// ONLINE REQUESTS (REQ_)
+// Physicians submit through request.html → Firestore 'venice_requests'.
+// Submitted requests are merged into the Vacation Tracker / NP Tracker live.
+// ══════════════════════════════════════════════════════════════════════════════
+const REQ_ROSTER = [
+  ...FT_ALL.map(p=>({id:p.id, name:p.name, role:'md'})),
+  ...FLOATS.map(p=>({id:p.id, name:p.name, role:'md'})),
+  ...ALL_NPS.map(p=>({id:p.id, name:p.name, role:'np'})),
+];
+let REQ_requests = {};   // docId -> request data
+let REQ_keys = {};       // providerId -> key
+let REQ_month = null, REQ_year = null;
+
+// ── Fix: cloud-restored providers were missing `id` and `outDays`, which made
+//    VT_renderResults throw when data came back from the shared Firestore doc.
+FB_deserializeProviders = function(arr) {
+  return (arr||[]).map(p => {
+    const dayCodes = Object.fromEntries(Object.entries(p.dayCodes||{}).map(([d,a]) => [d, new Set(a)]));
+    const outDays = new Set(Object.entries(dayCodes).filter(([,s]) => s.size > 0).map(([d]) => parseInt(d)));
+    return {...p, id: p.id || nameToId(p.name), dayCodes, outDays};
+  });
+};
+
+// ── Keep one entry per provider+month. An uploaded file named "Siegel, J" and an
+//    online request for "Siegel" would otherwise show up as two columns.
+//    The most recently added entry wins.
+function REQ_dedupe(list) {
+  const seen = new Map();
+  list.forEach((p, i) => seen.set(`${p.id||nameToId(p.name)||p.name}|${p.month}|${p.year}`, i));
+  const keep = new Set(seen.values());
+  for (let i = list.length - 1; i >= 0; i--) if (!keep.has(i)) list.splice(i, 1);
+}
+const REQ_origRender = VT_renderResults;
+VT_renderResults = function() { REQ_dedupe(VT_providerData); return REQ_origRender(); };
+
+// Request document → the same shape VT_parseProviderFile returns
+function REQ_toProvider(r) {
+  const dayCodes = {};
+  Object.entries(r.sessions||{}).forEach(([d, s]) => {
+    [s.am, s.pm].forEach(v => {
+      const code = normalizeCode(v);
+      if (code) { (dayCodes[d] = dayCodes[d] || new Set()).add(code); }
+    });
+  });
+  const outDays = new Set(Object.keys(dayCodes).map(Number));
+  return {name: r.name, id: r.providerId, month: r.month, year: r.year, outDays, dayCodes, source: 'online'};
+}
+
+function REQ_applyAll() {
+  let vtChanged = false, npChanged = false;
+  Object.values(REQ_requests).forEach(r => {
+    if (r.status !== 'submitted') return;
+    const prov = REQ_toProvider(r);
+    const isNP = r.role === 'np' || ALL_NPS.some(n => n.id === r.providerId);
+    if (isNP) {
+      const np = ALL_NPS.find(n => n.id === r.providerId);
+      prov.capTracked = np ? np.capTracked : false;
+      NP_providerData = NP_providerData.filter(p => !(p.id === prov.id && p.month === prov.month && p.year === prov.year));
+      NP_providerData.push(prov); npChanged = true;
+    } else {
+      for (let i = VT_providerData.length - 1; i >= 0; i--) {
+        const p = VT_providerData[i];
+        if ((p.id || nameToId(p.name)) === prov.id && p.month === prov.month && p.year === prov.year) VT_providerData.splice(i, 1);
+      }
+      VT_providerData.push(prov); vtChanged = true;
+    }
+  });
+  if (vtChanged) VT_renderResults();
+  if (npChanged) NP_render();
+  if (vtChanged || npChanged) RA_syncFromVT();
+}
+
+// ── Admin panel on the Vacation Tracker tab ──
+function REQ_buildPanel() {
+  const anchor = document.querySelector('#page-vt .upload-section');
+  if (!anchor || document.getElementById('REQ_panel')) return;
+  anchor.insertAdjacentHTML('afterend', `
+    <div class="upload-section" id="REQ_panel">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div>
+          <div class="section-title">Online Requests</div>
+          <div class="section-sub" style="margin-bottom:0">PHYSICIANS SUBMIT THROUGH THEIR PERSONAL LINK — NO LOGIN, NO EMAIL</div>
+        </div>
+        <div id="REQ_monthChips" style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;"></div>
+      </div>
+      <div id="REQ_warn" style="display:none;margin-top:12px;padding:10px 14px;border-radius:8px;background:var(--amber-lt);color:var(--amber);font-size:12px;"></div>
+      <div id="REQ_table" style="margin-top:14px;overflow-x:auto;"></div>
+    </div>`);
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  REQ_month = next.getMonth() + 1; REQ_year = next.getFullYear();
+  if (!FB_db) REQ_warn('Cloud sync is off (FIREBASE_CONFIG is null), so online requests are unavailable.');
+  else if (location.protocol === 'file:') REQ_warn('The suite is open as a local file. Physician links only work once the suite is hosted at a web address (for example Firebase Hosting). Requests already submitted still load here.');
+}
+function REQ_warn(t) { const el = document.getElementById('REQ_warn'); el.textContent = t; el.style.display = 'block'; }
+function REQ_setMonth(m, y) { REQ_month = m; REQ_year = y; REQ_renderPanel(); }
+
+function REQ_renderPanel() {
+  const chips = document.getElementById('REQ_monthChips');
+  if (!chips) return;
+  const now = new Date();
+  chips.innerHTML = [0,1,2,3].map(i => {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const m = d.getMonth() + 1, y = d.getFullYear(), active = m === REQ_month && y === REQ_year;
+    return `<button onclick="REQ_setMonth(${m},${y})" style="padding:4px 12px;border-radius:20px;border:1px solid ${active?'var(--navy)':'var(--grey2)'};background:${active?'var(--navy)':'white'};color:${active?'white':'var(--text2)'};font-size:11px;cursor:pointer;font-family:'DM Mono',monospace;">${d.toLocaleString('default',{month:'short',year:'numeric'})}</button>`;
+  }).join('');
+
+  const key = `${REQ_year}-${String(REQ_month).padStart(2,'0')}`;
+  let submitted = 0;
+  const rows = REQ_roster().map(p => {
+    const r = REQ_requests[`${p.id}_${key}`];
+    let status = '<span style="color:var(--grey3)">Not started</span>', when = '', days = '';
+    if (r && r.status === 'submitted') {
+      submitted++;
+      status = '<span style="color:var(--teal);font-weight:600">✓ Submitted</span>';
+      when = r.submittedAt ? FB_timeAgo(r.submittedAt.toDate()) : '';
+      days = Object.keys(REQ_toProvider(r).dayCodes).length + 'd';
+    } else if (r) {
+      status = '<span style="color:var(--amber)">Draft</span>';
+      when = r.updatedAt ? FB_timeAgo(r.updatedAt.toDate()) : '';
+    }
+    const notes = r && r.notes ? `<span title="${r.notes.replace(/"/g,'&quot;')}" style="cursor:help">📝</span>` : '';
+    return `<tr style="border-bottom:1px solid var(--grey2);">
+      <td style="padding:6px 10px;font-weight:500;">${p.name}</td>
+      <td style="padding:6px 10px;font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;">${p.role === 'np' ? 'NP/PA' : 'MD'}</td>
+      <td style="padding:6px 10px;font-size:12px;">${status}</td>
+      <td style="padding:6px 10px;font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;">${when}</td>
+      <td style="padding:6px 10px;font-size:11px;font-family:'DM Mono',monospace;">${days} ${notes}</td>
+      <td style="padding:6px 10px;text-align:right;white-space:nowrap;">
+        <button class="btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="REQ_copyLink('${p.id}',this)">${REQ_keys[p.id] ? 'Copy link' : 'Create link'}</button>
+      </td>
+    </tr>`;
+  }).join('');
+  document.getElementById('REQ_table').innerHTML = `
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-family:'DM Mono',monospace;">${submitted} of ${REQ_roster().length} submitted for ${new Date(REQ_year, REQ_month-1, 1).toLocaleString('default',{month:'long',year:'numeric'})}</div>
+    <table style="width:100%;border-collapse:collapse;min-width:560px;">${rows}</table>`;
+}
+function REQ_roster() { return REQ_ROSTER; }
+
+function REQ_newKey() {
+  const b = new Uint8Array(16); crypto.getRandomValues(b);
+  return [...b].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+async function REQ_copyLink(id, btn) {
+  if (!FB_db) return;
+  const p = REQ_ROSTER.find(x => x.id === id);
+  try {
+    let k = REQ_keys[id];
+    if (!k) {
+      k = REQ_newKey();
+      await FB_db.collection('venice_keys').doc(id).set({key: k, name: p.name, role: p.role,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()});
+      REQ_keys[id] = k;
+    }
+    const url = new URL('request.html', location.href);
+    url.searchParams.set('p', id); url.searchParams.set('k', k);
+    try { await navigator.clipboard.writeText(url.toString()); btn.textContent = 'Copied ✓'; }
+    catch { prompt(`Link for ${p.name}:`, url.toString()); }
+    setTimeout(() => REQ_renderPanel(), 1500);
+  } catch (e) { alert('Could not create link: ' + (e.code || e.message || e)); }
+}
+
+async function REQ_init() {
+  REQ_buildPanel();
+  REQ_renderPanel();
+  if (!FB_db) return;
+  // The suite's own listener only restores the shared saved data when nothing is loaded yet.
+  // Load it first so online requests arriving early don't block it.
+  try {
+    const snap = await FB_db.doc(FB_DOC).get();
+    if (snap.exists) FB_applySnapshot(snap.data());
+  } catch (e) { console.error('REQ: shared doc load failed', e); }
+  FB_db.collection('venice_keys').onSnapshot(snap => {
+    REQ_keys = {};
+    snap.forEach(d => { REQ_keys[d.id] = d.data().key; });
+    REQ_renderPanel();
+  }, err => console.error('venice_keys listener:', err));
+  FB_db.collection('venice_requests').onSnapshot(snap => {
+    REQ_requests = {};
+    snap.forEach(d => { REQ_requests[d.id] = d.data(); });
+    REQ_applyAll();
+    REQ_renderPanel();
+  }, err => { console.error('venice_requests listener:', err); REQ_warn('Could not read online requests: ' + (err.code || err.message)); });
+}
+REQ_init();
+</script>
 </body>
 </html>

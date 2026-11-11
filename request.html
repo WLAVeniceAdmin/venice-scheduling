@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schedule Request</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Instrument+Serif&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#0f2540;--navy2:#1a3a5c;--blue:#1d6fa4;--blue-lt:#e8f3fb;--teal:#0e8a7a;--teal-lt:#e3f5f3;
+  --amber:#c47a1a;--amber-lt:#fef6e4;--red:#b92d2d;--red-lt:#fdeaea;--grey:#f4f6f8;--grey2:#e8ebee;
+  --grey3:#b0b8c4;--text:#1a2535;--text2:#4a5568;--radius:10px;--shadow:0 2px 12px rgba(15,37,64,.10);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:#f0f4f8;color:var(--text);min-height:100vh;}
+header{background:var(--navy);color:#fff;padding:14px 16px;}
+header .t{font-family:'Instrument Serif',serif;font-size:20px;}
+header .s{font-size:11px;opacity:.6;font-family:'DM Mono',monospace;letter-spacing:.06em;text-transform:uppercase;margin-top:2px;}
+.main{max-width:980px;margin:0 auto;padding:20px 16px 60px;}
+.card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-bottom:16px;}
+h2{font-family:'Instrument Serif',serif;font-size:20px;color:var(--navy);font-weight:400;margin-bottom:4px;}
+.sub{font-size:12px;color:var(--text2);line-height:1.5;}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;}
+.chip{padding:6px 14px;border-radius:20px;border:1px solid var(--grey2);background:#fff;color:var(--text2);
+  font-size:12px;font-family:'DM Mono',monospace;cursor:pointer;}
+.chip.active{background:var(--navy);border-color:var(--navy);color:#fff;}
+.status{display:inline-block;margin-top:12px;padding:4px 10px;border-radius:12px;font-size:11px;font-family:'DM Mono',monospace;}
+.status.none{background:var(--grey);color:var(--text2);}
+.status.draft{background:var(--amber-lt);color:var(--amber);}
+.status.submitted{background:var(--teal-lt);color:var(--teal);}
+.range{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:12px;}
+.range label{display:block;font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;}
+input,select,textarea{border:1.5px solid var(--grey2);border-radius:7px;padding:7px 10px;font-size:13px;font-family:'DM Sans',sans-serif;color:var(--text);background:#fff;}
+textarea{width:100%;min-height:70px;resize:vertical;}
+.btn{border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:500;font-family:'DM Sans',sans-serif;cursor:pointer;}
+.btn.primary{background:var(--navy);color:#fff;}
+.btn.secondary{background:#fff;color:var(--navy);border:1.5px solid var(--grey2);}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+.grid-wrap{overflow-x:auto;}
+.grid{display:grid;grid-template-columns:repeat(5,minmax(120px,1fr));gap:6px;min-width:620px;}
+.dow{font-size:11px;font-family:'DM Mono',monospace;color:var(--text2);text-align:center;padding:4px 0;font-weight:600;}
+.day{border:1px solid var(--grey2);border-radius:8px;padding:6px 8px;min-height:84px;background:#fff;}
+.day.blank{background:transparent;border:none;}
+.day.hasreq{background:var(--red-lt);border-color:#f5b8b8;}
+.day .n{font-size:12px;font-weight:600;color:var(--navy);margin-bottom:4px;}
+.sess{display:flex;align-items:center;gap:6px;margin-top:3px;}
+.sess span{font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);width:20px;}
+.sess select{flex:1;padding:3px 4px;font-size:11px;min-width:0;}
+.legend{font-size:11px;color:var(--text2);margin-top:10px;line-height:1.6;}
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.msg{font-size:12px;font-family:'DM Mono',monospace;}
+.msg.err{color:var(--red);} .msg.ok{color:var(--teal);}
+.blocked{text-align:center;padding:48px 20px;}
+</style>
+</head>
+<body>
+<header>
+  <div class="t">Venice Clinic</div>
+  <div class="s">Monthly schedule request</div>
+</header>
+
+<div class="main" id="app">
+  <div class="card blocked"><div class="sub">Loading…</div></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+// Must match FIREBASE_CONFIG in the scheduling suite.
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCPPacxYcauZ-zH96QKFSOW7Ex7giKq0RE",
+  authDomain: "venice-scheduling.firebaseapp.com",
+  projectId: "venice-scheduling",
+  storageBucket: "venice-scheduling.firebasestorage.app",
+  messagingSenderId: "926486683805",
+  appId: "1:926486683805:web:5b718832e0292f6fa57474"
+};
+
+// Codes offered in the dropdowns. Blank = regular schedule (base profile).
+// The suite counts VAC, EL, LOA toward the cap; VV, SL, ROUNDING, OUT are shown but not capped.
+const CODES = ['VAC','EL','LOA','SL','VV','ROUNDING','OUT'];
+const CODE_LABELS = {VAC:'VAC – vacation',EL:'EL – education leave',LOA:'LOA – leave of absence',
+  SL:'SL – sick leave',VV:'VV – virtual visit',ROUNDING:'Rounding',OUT:'Out (other)'};
+
+const params = new URLSearchParams(location.search);
+const PID = (params.get('p')||'').trim();
+const KEY = (params.get('k')||'').trim();
+
+let db, who = null, sel = null, reqData = null;
+const app = document.getElementById('app');
+
+function pad(n){return String(n).padStart(2,'0');}
+function ym(y,m){return `${y}-${pad(m)}`;}
+function docId(y,m){return `${PID}_${ym(y,m)}`;}
+function monthLabel(y,m){return new Date(y,m-1,1).toLocaleString('default',{month:'long',year:'numeric'});}
+
+function blocked(msg){
+  app.innerHTML = `<div class="card blocked"><h2>Link not valid</h2><div class="sub" style="margin-top:8px">${msg}</div></div>`;
+}
+
+async function start(){
+  if(!PID || !KEY){ blocked('This page needs your personal link. Ask the scheduling admin to send it to you.'); return; }
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.firestore();
+    const snap = await db.collection('venice_keys').doc(PID).get();
+    if(!snap.exists || snap.data().key !== KEY){
+      blocked('This link has expired or was typed incorrectly. Ask the scheduling admin for a new link.');
+      return;
+    }
+    who = {id:PID, ...snap.data()};
+  }catch(e){
+    console.error(e);
+    blocked('Could not connect. Check your internet connection and reload the page.');
+    return;
+  }
+  // Second check: the person must type their last name (remembered on this device)
+  let remembered = '';
+  try { remembered = localStorage.getItem('venice_req_name_'+PID) || ''; } catch(e) {}
+  if (nameMatches(remembered)) { who.enteredName = remembered; await openForm(); }
+  else askName();
+}
+
+function lastName(full){ return String(full||'').split(',')[0].trim(); }
+function norm(s){ return String(s||'').toLowerCase().replace(/[^a-z]/g,''); }
+function nameMatches(input){
+  const n = norm(input);
+  return n.length > 0 && n === norm(lastName(who.name));
+}
+
+function askName(err){
+  app.innerHTML = `<div class="card" style="max-width:420px;margin:40px auto;">
+    <h2>Confirm it's you</h2>
+    <div class="sub" style="margin:6px 0 14px">Type your last name to open your schedule request.</div>
+    <form id="nameForm" style="display:flex;gap:8px;">
+      <input id="nameInput" autocomplete="family-name" placeholder="Last name" style="flex:1" autofocus>
+      <button class="btn primary" type="submit">Continue</button>
+    </form>
+    <div class="msg err" style="margin-top:10px;min-height:16px">${err||''}</div>
+  </div>`;
+  document.getElementById('nameForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const v = document.getElementById('nameInput').value.trim();
+    if (!nameMatches(v)) { askName("That name doesn't match this link. Check the spelling, or ask the scheduling admin for your own link."); return; }
+    try { localStorage.setItem('venice_req_name_'+PID, v); } catch(e) {}
+    who.enteredName = v;
+    await openForm();
+  });
+}
+
+async function openForm(){
+  // Default to next month
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth()+1, 1);
+  await selectMonth(next.getFullYear(), next.getMonth()+1);
+}
+
+async function selectMonth(y,m){
+  sel = {y,m};
+  reqData = {sessions:{}, notes:'', status:'none'};
+  try{
+    const snap = await db.collection('venice_requests').doc(docId(y,m)).get();
+    if(snap.exists){
+      const d = snap.data();
+      reqData = {sessions:d.sessions||{}, notes:d.notes||'', status:d.status||'draft',
+        submittedAt:d.submittedAt?d.submittedAt.toDate():null};
+    }
+  }catch(e){ console.error(e); }
+  render();
+}
+
+function render(){
+  const now = new Date();
+  const months = [0,1,2,3].map(i=>{const d=new Date(now.getFullYear(),now.getMonth()+i,1);return {y:d.getFullYear(),m:d.getMonth()+1};});
+  const {y,m} = sel;
+  const numDays = new Date(y,m,0).getDate();
+
+  let statusHtml;
+  if(reqData.status==='submitted'){
+    const when = reqData.submittedAt ? reqData.submittedAt.toLocaleString() : '';
+    statusHtml = `<span class="status submitted">✓ Submitted ${when}</span>`;
+  } else if(reqData.status==='draft'){
+    statusHtml = `<span class="status draft">Draft saved, not submitted yet</span>`;
+  } else {
+    statusHtml = `<span class="status none">Not started</span>`;
+  }
+
+  // Weekday grid (Mon–Fri)
+  let cells = ['Mon','Tue','Wed','Thu','Fri'].map(d=>`<div class="dow">${d}</div>`).join('');
+  let started = false;
+  for(let d=1; d<=numDays; d++){
+    const dow = new Date(y,m-1,d).getDay();
+    if(dow===0||dow===6) continue;
+    if(!started){ for(let i=1;i<dow;i++) cells += '<div class="day blank"></div>'; started = true; }
+    const s = reqData.sessions[d] || {};
+    const has = s.am || s.pm;
+    const opt = v => `<option value="">—</option>` + CODES.map(c=>`<option value="${c}"${v===c?' selected':''}>${c}</option>`).join('');
+    cells += `<div class="day${has?' hasreq':''}" id="day-${d}">
+      <div class="n">${d}</div>
+      <div class="sess"><span>AM</span><select data-d="${d}" data-s="am">${opt(s.am)}</select></div>
+      <div class="sess"><span>PM</span><select data-d="${d}" data-s="pm">${opt(s.pm)}</select></div>
+    </div>`;
+  }
+
+  const minD = `${y}-${pad(m)}-01`, maxD = `${y}-${pad(m)}-${pad(numDays)}`;
+
+  app.innerHTML = `
+    <div class="card">
+      <h2>${who.name || PID}</h2>
+      <div class="sub">Pick the month, mark the sessions you need off, then press <b>Submit</b>. Leave a session as “—” if you're working your regular schedule.</div>
+      <div class="chips">${months.map(o=>`<button class="chip${o.y===y&&o.m===m?' active':''}" onclick="selectMonth(${o.y},${o.m})">${monthLabel(o.y,o.m)}</button>`).join('')}</div>
+      ${statusHtml}
+    </div>
+
+    <div class="card">
+      <h2>Fill a date range</h2>
+      <div class="sub">Quick way to mark a full week of vacation, for example.</div>
+      <div class="range">
+        <div><label>From</label><input type="date" id="rFrom" min="${minD}" max="${maxD}"></div>
+        <div><label>To</label><input type="date" id="rTo" min="${minD}" max="${maxD}"></div>
+        <div><label>Code</label><select id="rCode">${CODES.map(c=>`<option value="${c}">${CODE_LABELS[c]}</option>`).join('')}<option value="">Clear (regular schedule)</option></select></div>
+        <button class="btn secondary" onclick="applyRange()">Apply</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>${monthLabel(y,m)}</h2>
+      <div class="grid-wrap"><div class="grid">${cells}</div></div>
+      <div class="legend">Weekends are not shown. Clinic holidays don't need to be entered.</div>
+    </div>
+
+    <div class="card">
+      <h2>Notes for the scheduler</h2>
+      <textarea id="notes" placeholder="Optional">${(reqData.notes||'').replace(/</g,'&lt;')}</textarea>
+    </div>
+
+    <div class="card actions">
+      ${reqData.status==='submitted' ? '' : `<button class="btn secondary" id="saveBtn" onclick="save('draft')">Save draft</button>`}
+      <button class="btn primary" id="submitBtn" onclick="save('submitted')">${reqData.status==='submitted'?'Submit changes':'Submit'}</button>
+      <span class="msg" id="msg"></span>
+    </div>`;
+
+  app.querySelectorAll('select[data-d]').forEach(el=>el.addEventListener('change',e=>{
+    const d = e.target.dataset.d, s = e.target.dataset.s;
+    if(!reqData.sessions[d]) reqData.sessions[d] = {};
+    reqData.sessions[d][s] = e.target.value;
+    const cur = reqData.sessions[d];
+    document.getElementById(`day-${d}`).classList.toggle('hasreq', !!(cur.am||cur.pm));
+  }));
+}
+
+function applyRange(){
+  const f = document.getElementById('rFrom').value, t = document.getElementById('rTo').value || f;
+  const code = document.getElementById('rCode').value;
+  if(!f){ setMsg('Pick a start date.', true); return; }
+  const a = parseInt(f.slice(8)), b = parseInt(t.slice(8));
+  const {y,m} = sel;
+  for(let d=Math.min(a,b); d<=Math.max(a,b); d++){
+    const dow = new Date(y,m-1,d).getDay();
+    if(dow===0||dow===6) continue;
+    reqData.sessions[d] = {am:code, pm:code};
+  }
+  reqData.notes = document.getElementById('notes').value;
+  render();
+}
+
+function setMsg(t, err){ const el=document.getElementById('msg'); if(el){ el.textContent=t; el.className='msg '+(err?'err':'ok'); } }
+
+async function save(status){
+  const {y,m} = sel;
+  // Drop empty entries so the stored document stays small
+  const sessions = {};
+  Object.entries(reqData.sessions).forEach(([d,s])=>{
+    const am = s.am||'', pm = s.pm||'';
+    if(am||pm) sessions[d] = {am, pm};
+  });
+  const notes = document.getElementById('notes').value;
+  if(status==='submitted' && !confirm(`Submit your ${monthLabel(y,m)} request? You can still change it later and resubmit.`)) return;
+  const btns = [...document.querySelectorAll('#saveBtn,#submitBtn')];
+  btns.forEach(b=>b.disabled = true);
+  setMsg('Saving…');
+  try{
+    const ts = firebase.firestore.FieldValue.serverTimestamp();
+    const payload = {
+      providerId: PID, name: who.name || PID, role: who.role || 'md', enteredName: who.enteredName || '',
+      month: m, year: y, sessions, notes, status, key: KEY, updatedAt: ts,
+    };
+    if(status==='submitted') payload.submittedAt = ts;
+    // Full replace (no merge) so sessions cleared by the physician are removed too
+    await db.collection('venice_requests').doc(docId(y,m)).set(payload);
+    reqData.sessions = sessions; reqData.notes = notes; reqData.status = status;
+    if(status==='submitted') reqData.submittedAt = new Date();
+    render();
+    setMsg(status==='submitted' ? 'Submitted. The scheduling team can see it now.' : 'Draft saved.');
+  }catch(e){
+    console.error(e);
+    btns.forEach(b=>b.disabled = false);
+    setMsg('Could not save: ' + (e.code||e.message||e), true);
+  }
+}
+
+start();
+</script>
+</body>
+</html>

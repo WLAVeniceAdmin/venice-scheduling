@@ -966,6 +966,22 @@ const MOD361_IDS = new Set(['siegel','morales','nudell','zakka','fang','saeedian
 
 // CLINIC_HOLIDAYS and WEEKLY_SHIFTS now live in shared-data.js (also used by request.html)
 
+// Session-level changes from online requests, filled in by the Online Requests add-on:
+//   SESSION_OVERRIDES[providerId]['YYYY-MM-DD'] = {am:'OFF', pm:''}   ('' = regular schedule)
+let SESSION_OVERRIDES = {};
+// Codes that mean the physician is not in clinic at all for that session
+const ABSENT_SESSION_CODES = new Set(['VAC','EL','LOA','SL','OUT']);
+// What a physician is actually doing in a session: their online-request change if any, else base schedule.
+// dk = 'YYYY-MM-DD', sess = 'am' | 'pm'
+function sessionShift(id, dk, sess){
+  const o = SESSION_OVERRIDES[id]?.[dk]?.[sess];
+  if (o) return o;
+  const dow = new Date(dk+'T12:00:00').getDay();
+  return WEEKLY_SHIFTS[id]?.[dow]?.[sess] || '';
+}
+function sessionOverridden(id, dk, sess){ return !!SESSION_OVERRIDES[id]?.[dk]?.[sess]; }
+function RA_dateKey(){ return document.getElementById('RA_dateInput')?.value || dateKey(new Date()); }
+
 const ALL_NPS = [
   {id:'jimenez',  name:'Jimenez, I',  capTracked:true},
   {id:'elevado',  name:'Elevado, G',  capTracked:true},
@@ -1170,8 +1186,12 @@ function VT_getAbsencesForDate(dateStr) {
   const out=new Set();
   VT_providerData.forEach(p=>{
     if(p.month===month&&p.year===year&&p.outDays.has(day)){
-      const id=nameToId(p.name);
-      if(id) out.add(id);
+      const id=p.id||nameToId(p.name);
+      if(!id) return;
+      // Online requests are per half day: whole-day absent only if both sessions are away.
+      // Half-day changes are handled per session through sessionShift().
+      if(p.source==='online' && !(ABSENT_SESSION_CODES.has(sessionShift(id,dateStr,'am')) && ABSENT_SESSION_CODES.has(sessionShift(id,dateStr,'pm')))) return;
+      out.add(id);
     }
   });
   return out;
@@ -1315,12 +1335,11 @@ function VT_renderResults() {
       }
       if(dd.hwInfo)return `<td><span class="code-pill hw">HW</span></td>`;
       if(!dd.isWeekend&&p.id){
-        const ws=WEEKLY_SHIFTS[p.id]?.[dd.dow];
-        if(ws){
-          const am=ws.am||'',pm=ws.pm||'';
-          const label=(am&&pm&&am!==pm)?`${am}/${pm}`:(am||pm);
-          if(label)return `<td><span class="code-pill base" title="Base profile — no request on file">${label}</span></td>`;
-        }
+        const am=sessionShift(p.id,dd.dk,'am'),pm=sessionShift(p.id,dd.dk,'pm');
+        const label=(am&&pm&&am!==pm)?`${am}/${pm}`:(am||pm);
+        const changed=sessionOverridden(p.id,dd.dk,'am')||sessionOverridden(p.id,dd.dk,'pm');
+        if(label&&changed)return `<td><span class="code-pill LOA" title="Changed from regular schedule (online request)">${label}</span></td>`;
+        if(label)return `<td><span class="code-pill base" title="Base profile — no request on file">${label}</span></td>`;
       }
       return '<td></td>';
     }).join('');
@@ -1561,10 +1580,11 @@ function VT_exportUnified() {
     for (const p of mdProviders) {
       const pd = vtById[p.id];
       const codes = pd && pd.dayCodes[day] && pd.dayCodes[day].size ? [...pd.dayCodes[day]].join('+') : '';
-      const ws = !isWeekend ? WEEKLY_SHIFTS[p.id]?.[dow] : null;
+      const dk = dateKey(new Date(year, month-1, day));
       let amType = '', pmType = '';
-      if (!codes) {
-        if (ws) { amType = ws.am || ''; pmType = ws.pm || ''; }
+      if (!isWeekend) {
+        amType = sessionShift(p.id, dk, 'am'); pmType = sessionShift(p.id, dk, 'pm');
+        if (codes && !sessionOverridden(p.id, dk, 'am') && !sessionOverridden(p.id, dk, 'pm')) { amType = ''; pmType = ''; }
       }
       const rooms = Array.isArray(p.rooms) && p.rooms.length ? p.rooms.join(' & ') : '';
       rows.push([dateStr, dayName, dotdAM, dotdPM, isWeekend ? '' : mdCapCount, mdCapStatus, npCapStatus,
@@ -1829,10 +1849,8 @@ function RA_render() {
 }
 
 function RA_getShift(id,dow) {
-  const s=WEEKLY_SHIFTS[id];
-  if(!s||!s[dow])return '';
-  const k=RA_session==='AM'?'am':'pm';
-  return s[dow][k]||'';
+  if(RA_session==='EVE')return '';
+  return sessionShift(id, RA_dateKey(), RA_session==='AM'?'am':'pm');
 }
 
 // ── Float auto-assignment ──
@@ -1843,8 +1861,7 @@ function RA_getShift(id,dow) {
 // Same rooms all day when possible.
 function RA_ftSessionShift(id,dow,sess){
   if(sess==='EVE')return '';
-  const s=WEEKLY_SHIFTS[id]?.[dow];
-  return s?(s[sess==='AM'?'am':'pm']||''):'';
+  return sessionShift(id, RA_dateKey(), sess==='AM'?'am':'pm');
 }
 function RA_floatNeedsRoom(f,dow,sess){
   if(sess==='EVE')return !!f.eve[dow];
@@ -1893,9 +1910,9 @@ function RA_getFloatInRoom(roomNum,dow,absentSet) {
 function RA_renderFTRoom(r, absentSet, dow) {
   const provider=FT_MAIN.find(p=>p.rooms&&p.rooms.includes(r));
   if(!provider)return `<div class="room-card"><div class="room-num">Rm ${r}</div></div>`;
-  const isOut=absentSet.has(provider.id);
   const floatUsing=RA_getFloatInRoom(r,dow,absentSet);
   const shift=RA_getShift(provider.id,dow);
+  const isOut=absentSet.has(provider.id)||ABSENT_SESSION_CODES.has(shift);
   // Room is only occupied when provider is F2F; all other codes (VV, IW, ET, AT, OFF) free the room
   const roomFree=shift && shift!=='F2F';
   let provTag='';
@@ -1988,8 +2005,8 @@ function RA_renderModules(containerId, absentSet) {
 
   // MOD 150
   const mod150Cards=FT_MOD150.map(p=>{
-    const isOut=absentSet.has(p.id);
     const shift=RA_getShift(p.id,dow);
+    const isOut=absentSet.has(p.id)||ABSENT_SESSION_CODES.has(shift);
     const roomFree=shift && shift!=='F2F';
     if(!p.rooms.length) return `<div class="room-card"><div class="room-num">TBD</div><div class="provider-tag ft">${p.name}</div><div class="session-code">Room TBD</div></div>`;
     return p.rooms.map(r=>`<div class="room-card">
@@ -2158,9 +2175,7 @@ async function RA_exportDailySchedule() {
   }
   function getShiftType(id, session) {
     if (isWeekend) return '';
-    const shifts = WEEKLY_SHIFTS[id]?.[dow];
-    if (shifts) return session==='AM' ? shifts.am||'' : shifts.pm||'';
-    return '';
+    return sessionShift(id, dateStr, session==='AM' ? 'am' : 'pm');
   }
   function floatRooms(id) {
     if (isWeekend) return '';
@@ -3121,6 +3136,16 @@ function REQ_toProvider(r) {
 
 function REQ_applyAll() {
   let vtChanged = false, npChanged = false;
+  // Rebuild half-day changes from submitted requests
+  SESSION_OVERRIDES = {};
+  Object.values(REQ_requests).forEach(r => {
+    if (r.status !== 'submitted') return;
+    Object.entries(r.sessions||{}).forEach(([d, s]) => {
+      if (!s.am && !s.pm) return;
+      const dk = `${r.year}-${String(r.month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      ((SESSION_OVERRIDES[r.providerId] ||= {})[dk] = {am: s.am||'', pm: s.pm||''});
+    });
+  });
   Object.values(REQ_requests).forEach(r => {
     if (r.status !== 'submitted') return;
     const prov = REQ_toProvider(r);
@@ -3140,7 +3165,7 @@ function REQ_applyAll() {
   });
   if (vtChanged) VT_renderResults();
   if (npChanged) NP_render();
-  if (vtChanged || npChanged) RA_syncFromVT();
+  if (vtChanged || npChanged) { RA_syncFromVT(); RA_render(); }
 }
 
 // ── Admin panel on the Vacation Tracker tab ──

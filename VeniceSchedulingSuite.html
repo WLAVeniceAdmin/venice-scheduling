@@ -1549,7 +1549,7 @@ function VT_exportUnified() {
     {id:'wessel', name:'Wessel', fullName:'Wessel',  rooms:[], module:'Float (361)'},
   ];
 
-  const rows = [['Date','Day','DOTD AM','DOTD PM','MD/DO Cap Count','MD/DO Cap Status','NP Cap Status','Role','Provider','Module','Rooms','Absence Code','AM Type','PM Type']];
+  const rows = [['Date','Day','DOTD AM','DOTD PM','MD/DO Cap Count','MD/DO Cap Status','NP Cap Status','Role','Provider','Module','Rooms','Absence Code','AM Type','PM Type','EVE Type']];
 
   for (let day = 1; day <= numDays; day++) {
     const dow = new Date(year, month-1, day).getDay();
@@ -1574,21 +1574,22 @@ function VT_exportUnified() {
       const pd = vtById[p.id];
       const codes = pd && pd.dayCodes[day] && pd.dayCodes[day].size ? [...pd.dayCodes[day]].join('+') : '';
       const dk = dateKey(new Date(year, month-1, day));
-      let amType = '', pmType = '';
+      let amType = '', pmType = '', eveType = '';
       if (!isWeekend) {
-        amType = sessionShift(p.id, dk, 'am'); pmType = sessionShift(p.id, dk, 'pm');
+        amType = sessionShift(p.id, dk, 'am'); pmType = sessionShift(p.id, dk, 'pm'); eveType = sessionShift(p.id, dk, 'eve');
         if (codes && !sessionOverridden(p.id, dk, 'am') && !sessionOverridden(p.id, dk, 'pm')) { amType = ''; pmType = ''; }
+        if (eveType && codes && !sessionOverridden(p.id, dk, 'eve') && codes.split('+').some(c => ABSENT_SESSION_CODES.has(c))) eveType = codes;
       }
       const rooms = Array.isArray(p.rooms) && p.rooms.length ? p.rooms.join(' & ') : '';
       rows.push([dateStr, dayName, dotdAM, dotdPM, isWeekend ? '' : mdCapCount, mdCapStatus, npCapStatus,
-        'MD/DO', p.fullName || p.name, p.module, rooms, codes, amType, pmType]);
+        'MD/DO', p.fullName || p.name, p.module, rooms, codes, amType, pmType, eveType]);
     }
 
     for (const p of ALL_NPS) {
       const pd = npById[p.id];
       const codes = pd && pd.dayCodes[day] && pd.dayCodes[day].size ? [...pd.dayCodes[day]].join('+') : '';
       rows.push([dateStr, dayName, dotdAM, dotdPM, isWeekend ? '' : mdCapCount, mdCapStatus, npCapStatus,
-        p.capTracked ? 'NP/PA (Staff)' : 'NP/PA', p.name, 'Mod 360', '', codes, '', '']);
+        p.capTracked ? 'NP/PA (Staff)' : 'NP/PA', p.name, 'Mod 360', '', codes, '', '', '']);
     }
   }
 
@@ -2203,7 +2204,7 @@ async function RA_exportDailySchedule() {
   }
   function getShiftType(id, session) {
     if (isWeekend) return '';
-    return sessionShift(id, dateStr, session==='AM' ? 'am' : 'pm');
+    return sessionShift(id, dateStr, SESS_KEY[session]);
   }
   function floatRooms(id) {
     if (isWeekend) return '';
@@ -2213,7 +2214,10 @@ async function RA_exportDailySchedule() {
   }
   function cellVal(id) {
     const code = getMDCode(id);
-    return { am: code||getShiftType(id,'AM'), pm: code||getShiftType(id,'PM'), absent: !!code };
+    // Evening only for physicians with evening clinic that day (Mon–Thu); a whole-day absence covers it too
+    const eveShift = getShiftType(id,'EVE');
+    const awayCode = code && !sessionOverridden(id,dateStr,'eve') && code.split('+').some(c=>ABSENT_SESSION_CODES.has(c));
+    return { am: code||getShiftType(id,'AM'), pm: code||getShiftType(id,'PM'), eve: eveShift ? (awayCode ? code : eveShift) : '', absent: !!code };
   }
 
   // ── ExcelJS workbook ──
@@ -2225,7 +2229,7 @@ async function RA_exportDailySchedule() {
   });
 
   sh.columns = [
-    {width:13},{width:30},{width:6},{width:20},{width:20},{width:26},
+    {width:13},{width:30},{width:6},{width:20},{width:20},{width:12},{width:26},
     {width:32},{width:16},{width:22},{width:22},{width:22},{width:22}
   ];
 
@@ -2252,7 +2256,7 @@ async function RA_exportDailySchedule() {
     cell.border = { top:{style:s}, left:{style:s}, bottom:{style:s}, right:{style:s} };
   }
   function styleHeader(row, bgArgb, fgArgb=C.white, sz=10) {
-    for (let c=1;c<=12;c++) {
+    for (let c=1;c<=13;c++) {
       const cell = row.getCell(c);
       setFill(cell, bgArgb);
       setFont(cell, { bold:true, color:{argb:fgArgb}, size:sz });
@@ -2261,7 +2265,7 @@ async function RA_exportDailySchedule() {
     }
   }
   function stylePhysRow(row, alt=false) {
-    for (let c=1;c<=12;c++) {
+    for (let c=1;c<=13;c++) {
       const cell = row.getCell(c);
       setFill(cell, alt ? C.rowAlt : C.white);
       setFont(cell, {});
@@ -2290,18 +2294,19 @@ async function RA_exportDailySchedule() {
     r.getCell(2).value = `${modLabel}       ${extLabel}`;
     r.getCell(4).value = 'AM';
     r.getCell(5).value = 'PM';
-    r.getCell(6).value = 'In-Basket Coverage';
-    r.getCell(7).value = 'Nursing Staff Schedule';
-    r.getCell(8).value = 'Lunch';
-    r.getCell(9).value = 'AM';
-    r.getCell(10).value = 'PM';
-    r.getCell(11).value = col11Label;
-    r.getCell(12).value = 'PM';
+    r.getCell(6).value = 'EVE';
+    r.getCell(7).value = 'In-Basket Coverage';
+    r.getCell(8).value = 'Nursing Staff Schedule';
+    r.getCell(9).value = 'Lunch';
+    r.getCell(10).value = 'AM';
+    r.getCell(11).value = 'PM';
+    r.getCell(12).value = col11Label;
+    r.getCell(13).value = 'PM';
     styleHeader(r, C.blue);
   }
 
   function addMDRow(rooms, id, fullName, idx) {
-    const {am, pm} = cellVal(id);
+    const {am, pm, eve} = cellVal(id);
     rn++;
     const r = sh.getRow(rn); r.height = 20;
     stylePhysRow(r, idx%2===1);
@@ -2313,33 +2318,36 @@ async function RA_exportDailySchedule() {
     r.getCell(2).alignment = { vertical:'middle', horizontal:'left' };
     r.getCell(4).alignment = { vertical:'middle', horizontal:'center' };
     r.getCell(5).alignment = { vertical:'middle', horizontal:'center' };
+    r.getCell(6).value = eve;
+    r.getCell(6).alignment = { vertical:'middle', horizontal:'center' };
     colorCode(r.getCell(4), am);
     colorCode(r.getCell(5), pm);
+    colorCode(r.getCell(6), eve);
   }
 
   function addBlankRow() {
     rn++;
     const r = sh.getRow(rn); r.height = 6;
-    for (let c=1;c<=12;c++) { setFill(r.getCell(c), C.white); setBorder(r.getCell(c),'hair'); }
+    for (let c=1;c<=13;c++) { setFill(r.getCell(c), C.white); setBorder(r.getCell(c),'hair'); }
   }
 
   // ── ROW 1: Title ──
   rn++;
   const r1 = sh.getRow(rn); r1.height = 26;
   r1.getCell(1).value = '*** Schedule is subject to change according to the clinic\'s need and staff availability. ***';
-  r1.getCell(7).value = 'Specimen Drop Off';
-  r1.getCell(8).value = 'MOD 150';
-  r1.getCell(10).value = 'MOD 361';
-  r1.getCell(11).value = 'MOD 362';
+  r1.getCell(8).value = 'Specimen Drop Off';
+  r1.getCell(9).value = 'MOD 150';
+  r1.getCell(11).value = 'MOD 361';
+  r1.getCell(12).value = 'MOD 362';
   styleHeader(r1, C.yellow, C.yellowText, 9);
   r1.getCell(1).font = { name:'Calibri', italic:true, size:9, bold:true, color:{argb:C.yellowText} };
   r1.getCell(1).alignment = { vertical:'middle', horizontal:'left', wrapText:true };
-  sh.mergeCells(`A1:F1`);
+  sh.mergeCells(`A1:G1`);
 
   // ── ROW 2: AM labels for specimen columns ──
   rn++;
   const r2 = sh.getRow(rn); r2.height = 15;
-  r2.getCell(7).value = 'AM';
+  r2.getCell(8).value = 'AM';
   styleHeader(r2, C.yellow, C.yellowText, 9);
 
   // ── ROW 3: Day / Date ──
@@ -2347,8 +2355,8 @@ async function RA_exportDailySchedule() {
   const r3 = sh.getRow(rn); r3.height = 22;
   r3.getCell(1).value = DOW_NAMES[dow];
   r3.getCell(3).value = `${MON_NAMES[month-1]} ${ordinal(day)}`;
-  r3.getCell(6).value = 'In-Basket Coverage';
-  r3.getCell(7).value = 'PM';
+  r3.getCell(7).value = 'In-Basket Coverage';
+  r3.getCell(8).value = 'PM';
   styleHeader(r3, C.yellow, C.yellowText, 9);
   r3.getCell(1).font = { name:'Calibri', bold:true, size:14, color:{argb:C.navy} };
   r3.getCell(3).font = { name:'Calibri', bold:true, size:14, color:{argb:C.navy} };
@@ -2362,12 +2370,12 @@ async function RA_exportDailySchedule() {
   r4.getCell(3).value = (dotdAM||dotdPM)
     ? `AM: Dr. ${dotdAM}                                     PM: Dr. ${dotdPM}`
     : '(load physician files to auto-assign)';
-  r4.getCell(7).value = 'SCREENING ROOMS: MOD 361 AND MOD 362 — RM 20';
-  r4.getCell(9).value = 'COVERING NURSE / FLOAT';
-  r4.getCell(11).value = 'Other Assignment';
+  r4.getCell(8).value = 'SCREENING ROOMS: MOD 361 AND MOD 362 — RM 20';
+  r4.getCell(10).value = 'COVERING NURSE / FLOAT';
+  r4.getCell(12).value = 'Other Assignment';
   styleHeader(r4, C.navy, C.white, 11);
-  sh.mergeCells(`C4:F4`); sh.mergeCells(`G4:H4`); sh.mergeCells(`I4:J4`);
-  [1,3,7,9,11].forEach(c => {
+  sh.mergeCells(`C4:G4`); sh.mergeCells(`H4:I4`); sh.mergeCells(`J4:K4`);
+  [1,3,8,10,12].forEach(c => {
     r4.getCell(c).alignment = { vertical:'middle', horizontal:'center', wrapText:true };
   });
 
@@ -2413,12 +2421,13 @@ async function RA_exportDailySchedule() {
   npHdr.getCell(2).value = 'Module 360';
   npHdr.getCell(4).value = 'AM';
   npHdr.getCell(5).value = 'PM';
-  npHdr.getCell(6).value = 'In-Basket Coverage';
-  npHdr.getCell(7).value = 'Nursing Staff Schedule';
-  npHdr.getCell(8).value = 'Lunch';
-  npHdr.getCell(9).value = 'AM';
-  npHdr.getCell(10).value = 'PM';
-  npHdr.getCell(11).value = 'Other Assignment';
+  npHdr.getCell(6).value = 'EVE';
+  npHdr.getCell(7).value = 'In-Basket Coverage';
+  npHdr.getCell(8).value = 'Nursing Staff Schedule';
+  npHdr.getCell(9).value = 'Lunch';
+  npHdr.getCell(10).value = 'AM';
+  npHdr.getCell(11).value = 'PM';
+  npHdr.getCell(12).value = 'Other Assignment';
   styleHeader(npHdr, C.teal);
 
   ALL_NPS.forEach((p, i) => {
@@ -2439,7 +2448,7 @@ async function RA_exportDailySchedule() {
   const rFoot = sh.getRow(rn); rFoot.height = 14;
   rFoot.getCell(1).value = `Generated by Venice Clinic Scheduling Suite · ${new Date().toLocaleDateString()} · Physician schedule only — nursing/in-basket to be completed manually`;
   setFont(rFoot.getCell(1), { size:8, italic:true, color:{argb:'FF999999'} });
-  sh.mergeCells(`A${rn}:L${rn}`);
+  sh.mergeCells(`A${rn}:M${rn}`);
 
   // ── Download ──
   const buffer = await wb.xlsx.writeBuffer();

@@ -37,6 +37,6 @@ const WEEKLY_SHIFTS = {
   saeedian: {1:{am:'F2F',pm:'F2F'},2:{am:'VV', pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
   siegel:   {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
   zakka:    {1:{am:'F2F',pm:'AT'}, 2:{am:'IW', pm:'ET'}, 3:{am:'F2F',pm:'AT'}, 4:{am:'F2F',pm:'F2F'},5:{am:'IW', pm:'F2F'}},
-  noori:    {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET', eve:'F2F'}, 3:{am:'VV', pm:'OFF'},4:{am:'F2F',pm:'F2F',eve:'F2F'},5:{am:'F2F',pm:'F2F'}},  // eve Tue+Thu
+  noori:    {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET', eve:'F2F'}, 3:{am:'VV', pm:'OFF'},4:{am:'F2F',pm:'F2F',eve:'F2F'},5:{am:'F2F',pm:'F2F'}},  // profile Dec 2026: eve Tue+Thu
   wessel:   {1:{am:'OFF',pm:'VV'}, 2:{am:'F2F',pm:'F2F',eve:'F2F'},3:{am:'F2F',pm:'F2F'},4:{am:'ET', pm:'F2F',eve:'F2F'},5:{am:'F2F',pm:'F2F'}},  // profile Aug 2026: eve Tue+Thu
 };

@@ -629,7 +629,7 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
 <div id="page-heatmap" class="page">
 <div class="main">
   <div class="vt-rules-banner" style="margin-bottom:18px;">
-    <div class="vt-rule-item"><span class="rule-badge ok">MOD 361</span><span>Siegel · Morales · Nudell · Zakka · Fang · Saeedian · Noori · Wessel (float)</span></div>
+    <div class="vt-rule-item"><span class="rule-badge ok">MOD 361</span><span>Siegel · Morales · Nudell · Zakka · Fang · Saeedian · Noori (float) · Wessel (float)</span></div>
     <div class="vt-rule-item"><span class="rule-badge code">MOD 362</span><span>Nguyen · Lagos · Green · Dao · Chen · Kimm</span></div>
     <div class="vt-rule-item"><span class="rule-badge hw">MOD 150</span><span>Bazargan-Lari · Ozaki · Pham · Moghtader</span></div>
   </div>
@@ -968,28 +968,13 @@ const FT_MOD150 = [
 ];
 const FT_ALL = [...FT_MAIN, ...FT_MOD150];
 
-const FLOAT_SCHEDULE = {
-  noori: {
-    name:'Noori',
-    schedule:{
-      1:{AM:{rooms:[],code:'VV'},PM:{rooms:[],code:'OFF'},EVE:null},
-      2:{AM:{rooms:[7,8]},PM:{rooms:[],code:'ET'},EVE:null},
-      3:{AM:{rooms:[25,26]},PM:{rooms:[25,26]},EVE:{rooms:[25,26]}},
-      4:{AM:{rooms:[9,10]},PM:{rooms:[5,6]},EVE:{rooms:[5,6]}},
-      5:{AM:{rooms:[15,16]},PM:{rooms:[25,26]},EVE:null},
-    }
-  },
-  wessel: {
-    name:'Wessel',
-    schedule:{
-      1:{AM:{rooms:[17,18]},PM:{rooms:[17,18]},EVE:null},
-      2:{AM:{rooms:[11,12]},PM:{rooms:[],code:'ET'},EVE:null},
-      3:{AM:{rooms:[17,18]},PM:{rooms:[5,6]},EVE:null},
-      4:{AM:{rooms:[13,14]},PM:{rooms:[13,14]},EVE:null},
-      5:{AM:{rooms:[5,6]},PM:{rooms:[5,6]},EVE:null},
-    }
-  }
-};
+// Float physicians — no fixed rooms. Rooms are auto-assigned each session (see RA_assignFloats).
+// AM/PM clinic days come from WEEKLY_SHIFTS; 'eve' lists weekdays (1=Mon … 5=Fri) with evening F2F clinic.
+const FLOATS = [
+  {id:'noori',  name:'Noori',  eve:{2:true, 4:true}},   // Tue + Thu 5–7pm
+  {id:'wessel', name:'Wessel', eve:{}},
+];
+const MOD361_IDS = new Set(['siegel','morales','nudell','zakka','fang','saeedian']);
 
 // Base weekly schedule profiles — sourced from physician profile docs (physician profiles folder).
 // Keys: 1=Mon … 5=Fri. Used as fallback when a monthly schedule day is blank.
@@ -1010,7 +995,7 @@ const WEEKLY_SHIFTS = {
   saeedian: {1:{am:'F2F',pm:'F2F'},2:{am:'VV', pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
   siegel:   {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
   zakka:    {1:{am:'F2F',pm:'AT'}, 2:{am:'IW', pm:'ET'}, 3:{am:'F2F',pm:'AT'}, 4:{am:'F2F',pm:'F2F'},5:{am:'IW', pm:'F2F'}},
-  noori:    {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
+  noori:    {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'VV', pm:'OFF'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
   wessel:   {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
 };
 
@@ -1610,14 +1595,9 @@ function VT_exportUnified() {
       const pd = vtById[p.id];
       const codes = pd && pd.dayCodes[day] && pd.dayCodes[day].size ? [...pd.dayCodes[day]].join('+') : '';
       const ws = !isWeekend ? WEEKLY_SHIFTS[p.id]?.[dow] : null;
-      const fs = !isWeekend && FLOAT_SCHEDULE[p.id] ? FLOAT_SCHEDULE[p.id].schedule[dow] : null;
       let amType = '', pmType = '';
       if (!codes) {
         if (ws) { amType = ws.am || ''; pmType = ws.pm || ''; }
-        else if (fs) {
-          amType = fs.AM?.code || (fs.AM?.rooms?.length ? 'F2F' : '');
-          pmType = fs.PM?.code || (fs.PM?.rooms?.length ? 'F2F' : '');
-        }
       }
       const rooms = Array.isArray(p.rooms) && p.rooms.length ? p.rooms.join(' & ') : '';
       rows.push([dateStr, dayName, dotdAM, dotdPM, isWeekend ? '' : mdCapCount, mdCapStatus, npCapStatus,
@@ -1888,13 +1868,58 @@ function RA_getShift(id,dow) {
   return s[dow][k]||'';
 }
 
+// ── Float auto-assignment ──
+// A full-time physician's room pair is open for a session when they are absent (VAC/EL/LOA)
+// or their base schedule for that session is anything other than F2F (OFF, VV, ET, AT, IW…).
+// Evenings: full-time base profiles have no evening clinic, so all FT rooms count as open.
+// Order: MOD 361 rooms first, then MOD 362. Floats get rooms before NP/PAs.
+// Same rooms all day when possible.
+function RA_ftSessionShift(id,dow,sess){
+  if(sess==='EVE')return '';
+  const s=WEEKLY_SHIFTS[id]?.[dow];
+  return s?(s[sess==='AM'?'am':'pm']||''):'';
+}
+function RA_floatNeedsRoom(f,dow,sess){
+  if(sess==='EVE')return !!f.eve[dow];
+  return RA_ftSessionShift(f.id,dow,sess)==='F2F';
+}
+function RA_openPairs(dow,sess,absentSet){
+  const ordered=[...FT_MAIN.filter(p=>MOD361_IDS.has(p.id)),...FT_MAIN.filter(p=>!MOD361_IDS.has(p.id))];
+  return ordered.filter(p=>{
+    if(absentSet.has(p.id)||sess==='EVE')return true;
+    const sh=RA_ftSessionShift(p.id,dow,sess);
+    return sh && sh!=='F2F';
+  }).map(p=>p.rooms);
+}
+function RA_assignFloats(dow,absentSet){
+  const S=['AM','PM','EVE'];
+  const res={AM:{},PM:{},EVE:{},unassigned:[]};
+  if(dow===0||dow===6)return res;
+  const open={},taken={};
+  S.forEach(x=>{open[x]=RA_openPairs(dow,x,absentSet);taken[x]=new Set();});
+  const key=r=>r.join('-');
+  const isFree=(x,r)=>r&&open[x].some(o=>key(o)===key(r))&&!taken[x].has(key(r));
+  const give=(x,f,r)=>{res[x][f.id]=r;taken[x].add(key(r));};
+  const active=FLOATS.filter(f=>!absentSet.has(f.id));
+  // Pass 1: floats in clinic AM and PM get a pair that is open for both sessions
+  active.filter(f=>RA_floatNeedsRoom(f,dow,'AM')&&RA_floatNeedsRoom(f,dow,'PM')).forEach(f=>{
+    const r=open.AM.find(o=>isFree('AM',o)&&isFree('PM',o));
+    if(r){give('AM',f,r);give('PM',f,r);}
+  });
+  // Pass 2: everything else, preferring the rooms used in the neighbouring session
+  const prefer={AM:['PM'],PM:['AM'],EVE:['PM','AM']};
+  S.forEach(x=>active.forEach(f=>{
+    if(!RA_floatNeedsRoom(f,dow,x)||res[x][f.id])return;
+    let r=prefer[x].map(y=>res[y][f.id]).find(c=>isFree(x,c));
+    if(!r)r=open[x].find(o=>isFree(x,o));
+    if(r)give(x,f,r);else res.unassigned.push({id:f.id,name:f.name,session:x});
+  }));
+  return res;
+}
+let RA_curAssign={AM:{},PM:{},EVE:{},unassigned:[]};
 function RA_getFloatInRoom(roomNum,dow,absentSet) {
-  for(const[fid,fdata]of Object.entries(FLOAT_SCHEDULE)){
-    if(absentSet.has(fid))continue;
-    const ds=fdata.schedule[dow];if(!ds)continue;
-    const ss=ds[RA_session];
-    if(ss&&ss.rooms&&ss.rooms.includes(roomNum))return fdata.name;
-  }
+  const a=RA_curAssign[RA_session]||{};
+  for(const f of FLOATS){ if(a[f.id]&&a[f.id].includes(roomNum))return f.name; }
   return null;
 }
 
@@ -1914,6 +1939,8 @@ function RA_renderFTRoom(r, absentSet, dow) {
     const label=shift==='VV'?'📱 VV':shift;
     provTag=`<div class="provider-tag vv-tag">${provider.name}</div><div class="session-code">${label} (room free)</div>`;
     if(floatUsing)provTag+=`<div class="provider-tag float" style="margin-top:2px;font-size:11px;">↪ ${floatUsing}</div>`;
+  } else if(floatUsing) {
+    provTag=`<div class="provider-tag vv-tag">${provider.name}</div><div class="provider-tag float" style="margin-top:2px;font-size:11px;">↪ ${floatUsing}</div>`;
   } else {
     provTag=`<div class="provider-tag ft">${provider.name}</div>`;
     if(shift)provTag+=`<div class="session-code">${shift}</div>`;
@@ -1947,6 +1974,7 @@ function RA_renderModules(containerId, absentSet) {
     return;
   }
 
+  RA_curAssign=RA_assignFloats(dow,absentSet);
   // Venice rows
   const row1=[1,2,3,4,5,6,7,8].map(r=>RA_renderFTRoom(r,absentSet,dow)).join('');
   const row2=[...([9,10,11,12,13,14,15,16,17,18].map(r=>RA_renderFTRoom(r,absentSet,dow))),RA_renderSpecialRoom(19)].join('');
@@ -1962,35 +1990,33 @@ function RA_renderModules(containerId, absentSet) {
   // Float section
   const dowName=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dow];
   let floatCards='';
-  for(const[fid,fdata]of Object.entries(FLOAT_SCHEDULE)){
-    const isOut=absentSet.has(fid);
-    const ds=fdata.schedule[dow];
+  for(const f of FLOATS){
+    const isOut=absentSet.has(f.id);
     let sessRows='';
-    ['AM','PM','EVE'].forEach(s=>{
-      if(!ds)return;
-      const info=ds[s];
-      if(!info&&s==='EVE')return;
-      const rooms=info?.rooms?.length?info.rooms.join(', '):null;
-      const code=info?.code||'';
-      sessRows+=`<div class="float-row">
-        <span class="float-session">${s}</span>
-        ${rooms?`<span class="float-rooms">Rm ${rooms}</span>`:''}
-        ${code?`<span class="float-code">${code}</span>`:''}
-        ${!rooms&&!code?`<span class="float-code">—</span>`:''}
-      </div>`;
+    ['AM','PM','EVE'].forEach(x=>{
+      if(x==='EVE'&&!f.eve[dow])return;
+      const code=x==='EVE'?'F2F':RA_ftSessionShift(f.id,dow,x);
+      const rooms=RA_curAssign[x][f.id];
+      let body;
+      if(isOut)body=`<span class="float-code">—</span>`;
+      else if(rooms)body=`<span class="float-rooms">Rm ${rooms.join(', ')}</span>`;
+      else if(code==='F2F')body=`<span class="float-code" style="color:var(--red);font-weight:700">⚠ no open room</span>`;
+      else body=`<span class="float-code">${code||'—'}</span>`;
+      sessRows+=`<div class="float-row"><span class="float-session">${x}</span>${body}</div>`;
     });
-    const hs=ds?.[RA_session];
-    const assigned=hs?.rooms?.length?`Rooms ${hs.rooms.join(' & ')} this ${RA_session}`:(hs?.code||'No rooms this session');
+    const hr=RA_curAssign[RA_session]?.[f.id];
+    const hc=RA_session==='EVE'?(f.eve[dow]?'F2F':''):RA_ftSessionShift(f.id,dow,RA_session);
+    const assigned=hr?`Rooms ${hr.join(' & ')} this ${RA_session}`:(hc==='F2F'?'⚠ No open room — assign manually':(hc||'Not in clinic this session'));
     floatCards+=`<div class="float-doctor">
       <div class="float-name" style="${isOut?'text-decoration:line-through;opacity:.5':''}">
         <span style="width:8px;height:8px;border-radius:50%;background:var(--teal);display:inline-block"></span>
-        ${fdata.name}${isOut?' <span style="color:var(--red);font-size:11px;">(ABSENT)</span>':''}
+        ${f.name}${isOut?' <span style="color:var(--red);font-size:11px;">(ABSENT)</span>':''}
       </div>
       <div style="font-size:11px;color:var(--text2);margin-bottom:8px;font-family:'DM Mono',monospace;">${isOut?'—':assigned}</div>
       <div class="float-schedule">${sessRows}</div>
     </div>`;
   }
-  const floatHTML=`<div class="float-section"><div class="float-header">FLOAT PHYSICIANS — ${dowName} Fixed Room Patterns</div>
+  const floatHTML=`<div class="float-section"><div class="float-header">FLOAT PHYSICIANS — ${dowName} Auto-Assigned Rooms (MOD 361 first)</div>
     <div class="float-grid">${floatCards}</div></div>`;
 
   // MOD 150
@@ -2167,15 +2193,12 @@ async function RA_exportDailySchedule() {
     if (isWeekend) return '';
     const shifts = WEEKLY_SHIFTS[id]?.[dow];
     if (shifts) return session==='AM' ? shifts.am||'' : shifts.pm||'';
-    const fs = FLOAT_SCHEDULE[id]?.schedule[dow];
-    if (fs) { const slot=fs[session]; return slot?.code||(slot?.rooms?.length?'F2F':''); }
     return '';
   }
   function floatRooms(id) {
     if (isWeekend) return '';
-    const fs = FLOAT_SCHEDULE[id]?.schedule[dow];
-    if (!fs) return '';
-    const all=[...new Set([...(fs.AM?.rooms||[]),...(fs.PM?.rooms||[])])].filter(Boolean);
+    const a = RA_assignFloats(dow, RA_allAbsent());
+    const all=[...new Set([...(a.AM[id]||[]),...(a.PM[id]||[])])];
     return all.length ? all.join(' & ') : '';
   }
   function cellVal(id) {

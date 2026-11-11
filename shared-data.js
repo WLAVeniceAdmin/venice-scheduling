@@ -19,10 +19,11 @@ const CLINIC_HOLIDAYS = new Set([
 
 // Base weekly schedule profiles — sourced from physician profile docs (physician profiles folder).
 // Keys: 1=Mon … 5=Fri. Used as fallback when a monthly schedule day is blank.
+// eve:'F2F' = 5–7pm evening clinic that day (only physicians who do evenings have it).
 const WEEKLY_SHIFTS = {
   bazargan: {1:{am:'AT', pm:'AT'}, 2:{am:'AT', pm:'AT'}, 3:{am:'AT', pm:'AT'}, 4:{am:'F2F',pm:'AT'}, 5:{am:'F2F',pm:'AT'}},
   chen:     {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'VV'}, 5:{am:'F2F',pm:'VV'}},
-  dao:      {1:{am:'VV', pm:'OFF'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
+  dao:      {1:{am:'VV', pm:'OFF'},2:{am:'F2F',pm:'ET', eve:'F2F'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F',eve:'F2F'},5:{am:'F2F',pm:'F2F'}},  // profile June 2026: eve Tue+Thu
   fang:     {1:{am:'OFF',pm:'OFF'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'VV', pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
   green:    {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'OFF',pm:'F2F'},4:{am:'F2F',pm:'OFF'},5:{am:'F2F',pm:'IW'}},
   kimm:     {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'OFF'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'OFF'}},
@@ -30,12 +31,12 @@ const WEEKLY_SHIFTS = {
   moghtader:{1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'F2F'},3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'ET'}, 5:{am:'F2F',pm:'F2F'}},
   morales:  {1:{am:'F2F',pm:'OFF'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'OFF'},5:{am:'F2F',pm:'F2F'}},
   nguyen:   {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'VV'}, 5:{am:'F2F',pm:'F2F'}},
-  nudell:   {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'OFF'},5:{am:'OFF',pm:'OFF'}},
+  nudell:   {1:{am:'F2F',pm:'F2F',eve:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F',eve:'F2F'},4:{am:'F2F',pm:'OFF'},5:{am:'OFF',pm:'OFF'}},  // profile June 2026: eve Mon+Wed
   ozaki:    {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'F2F'},3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'ET'}, 5:{am:'F2F',pm:'F2F'}},
   pham:     {1:{am:'AT', pm:'OFF'},2:{am:'F2F',pm:'F2F'},3:{am:'OFF',pm:'IW'}, 4:{am:'F2F',pm:'ET'}, 5:{am:'F2F',pm:'F2F'}},
   saeedian: {1:{am:'F2F',pm:'F2F'},2:{am:'VV', pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
   siegel:   {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
   zakka:    {1:{am:'F2F',pm:'AT'}, 2:{am:'IW', pm:'ET'}, 3:{am:'F2F',pm:'AT'}, 4:{am:'F2F',pm:'F2F'},5:{am:'IW', pm:'F2F'}},
-  noori:    {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'VV', pm:'OFF'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
-  wessel:   {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET'}, 3:{am:'F2F',pm:'F2F'},4:{am:'F2F',pm:'F2F'},5:{am:'F2F',pm:'F2F'}},
+  noori:    {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET', eve:'F2F'}, 3:{am:'VV', pm:'OFF'},4:{am:'F2F',pm:'F2F',eve:'F2F'},5:{am:'F2F',pm:'F2F'}},  // eve Tue+Thu
+  wessel:   {1:{am:'OFF',pm:'VV'}, 2:{am:'F2F',pm:'F2F',eve:'F2F'},3:{am:'F2F',pm:'F2F'},4:{am:'ET', pm:'F2F',eve:'F2F'},5:{am:'F2F',pm:'F2F'}},  // profile Aug 2026: eve Tue+Thu
 };

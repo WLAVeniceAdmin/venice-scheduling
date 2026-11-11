@@ -89,6 +89,8 @@ const ALL_CODES = ['F2F','VV','ET','AT','IW','OFF','VAC','EL','LOA','SL','ROUNDI
 const ABSENCE = new Set(['VAC','EL','LOA','SL','OUT']);
 // Regular schedule for a weekday session, from shared-data.js ('' if none, e.g. NP/PAs)
 function baseCode(dow, s){ return ((typeof WEEKLY_SHIFTS!=='undefined' && WEEKLY_SHIFTS[PID]?.[dow]) || {})[s] || ''; }
+// Show an EVE row only for physicians who do evening clinic
+function hasEve(){ return typeof WEEKLY_SHIFTS!=='undefined' && Object.values(WEEKLY_SHIFTS[PID]||{}).some(x=>x && x.eve); }
 function isClosed(y,m,d){ return typeof CLINIC_HOLIDAYS!=='undefined' && CLINIC_HOLIDAYS.has(`${y}-${pad(m)}-${pad(d)}`); }
 const CODE_LABELS = {VAC:'VAC – vacation',EL:'EL – education leave',LOA:'LOA – leave of absence',
   SL:'SL – sick leave',VV:'VV – virtual visit',ROUNDING:'Rounding',OUT:'Out (other)'};
@@ -212,7 +214,7 @@ function render(){
       return `<div class="sess"><span>${key.toUpperCase()}</span><select data-d="${d}" data-s="${key}" data-base="${base}"${chosen?' class="chg"':''}>${opts}</select></div>`;
     };
     cells += `<div class="day ${dayClass(s)}" id="day-${d}">
-      <div class="n">${d}</div>${sessHtml('am')}${sessHtml('pm')}
+      <div class="n">${d}</div>${sessHtml('am')}${sessHtml('pm')}${hasEve()?sessHtml('eve'):''}
     </div>`;
   }
 
@@ -274,14 +276,17 @@ function applyRange(){
   for(let d=Math.min(a,b); d<=Math.max(a,b); d++){
     const dow = new Date(y,m-1,d).getDay();
     if(dow===0||dow===6||isClosed(y,m,d)) continue;
-    reqData.sessions[d] = {am: code===baseCode(dow,'am')?'':code, pm: code===baseCode(dow,'pm')?'':code};
+    const eveBase = baseCode(dow,'eve');
+    reqData.sessions[d] = {am: code===baseCode(dow,'am')?'':code, pm: code===baseCode(dow,'pm')?'':code,
+      // evening follows the range only on the physician's regular evening days
+      eve: (hasEve() && eveBase && code!==eveBase) ? code : ''};
   }
   reqData.notes = document.getElementById('notes').value;
   render();
 }
 
 function dayClass(s){
-  const v = [s.am, s.pm].filter(Boolean);
+  const v = [s.am, s.pm, s.eve].filter(Boolean);
   if(v.some(c=>ABSENCE.has(c))) return 'hasreq';
   return v.length ? 'changed' : '';
 }
@@ -293,8 +298,8 @@ async function save(status){
   // Drop empty entries so the stored document stays small
   const sessions = {};
   Object.entries(reqData.sessions).forEach(([d,s])=>{
-    const am = s.am||'', pm = s.pm||'';
-    if(am||pm) sessions[d] = {am, pm};
+    const am = s.am||'', pm = s.pm||'', eve = s.eve||'';
+    if(am||pm||eve) sessions[d] = {am, pm, eve};
   });
   const notes = document.getElementById('notes').value;
   if(status==='submitted' && !confirm(`Submit your ${monthLabel(y,m)} request? You can still change it later and resubmit.`)) return;

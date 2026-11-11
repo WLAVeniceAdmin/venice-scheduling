@@ -957,10 +957,10 @@ const FT_MOD150 = [
 const FT_ALL = [...FT_MAIN, ...FT_MOD150];
 
 // Float physicians — no fixed rooms. Rooms are auto-assigned each session (see RA_assignFloats).
-// AM/PM clinic days come from WEEKLY_SHIFTS; 'eve' lists weekdays (1=Mon … 5=Fri) with evening F2F clinic.
+// AM/PM/EVE clinic sessions come from WEEKLY_SHIFTS (eve:'F2F' on evening clinic days).
 const FLOATS = [
-  {id:'noori',  name:'Noori',  eve:{2:true, 4:true}},   // Tue + Thu 5–7pm
-  {id:'wessel', name:'Wessel', eve:{}},
+  {id:'noori',  name:'Noori'},    // evening clinic days live in WEEKLY_SHIFTS (shared-data.js)
+  {id:'wessel', name:'Wessel'},
 ];
 const MOD361_IDS = new Set(['siegel','morales','nudell','zakka','fang','saeedian']);
 
@@ -979,6 +979,7 @@ function sessionShift(id, dk, sess){
   const dow = new Date(dk+'T12:00:00').getDay();
   return WEEKLY_SHIFTS[id]?.[dow]?.[sess] || '';
 }
+const SESS_KEY = {AM:'am', PM:'pm', EVE:'eve'};
 function sessionOverridden(id, dk, sess){ return !!SESSION_OVERRIDES[id]?.[dk]?.[sess]; }
 function RA_dateKey(){ return document.getElementById('RA_dateInput')?.value || dateKey(new Date()); }
 
@@ -1219,7 +1220,7 @@ function VT_renderBaseProfiles() {
         const am=ws.am||'—', pm=ws.pm||'—';
         const amColor=am==='F2F'?'var(--teal)':am==='OFF'||am==='---'?'var(--grey3)':'var(--amber)';
         const pmColor=pm==='F2F'?'var(--teal)':pm==='ET'?'#1a56db':pm==='OFF'||pm==='---'?'var(--grey3)':'var(--amber)';
-        html+=`<td style="padding:4px 12px;text-align:center;"><span style="color:${amColor}">${am}</span><span style="color:var(--grey3);margin:0 2px;">/</span><span style="color:${pmColor}">${pm}</span></td>`;
+        html+=`<td style="padding:4px 12px;text-align:center;"><span style="color:${amColor}">${am}</span><span style="color:var(--grey3);margin:0 2px;">/</span><span style="color:${pmColor}">${pm}</span>${ws.eve?`<span style="color:var(--blue);margin-left:4px;" title="Evening clinic 5–7pm">+EVE</span>`:''}</td>`;
       } else {
         html+=`<td style="padding:4px 12px;text-align:center;color:var(--grey3);">—</td>`;
       }
@@ -1841,28 +1842,26 @@ function RA_render() {
 }
 
 function RA_getShift(id,dow) {
-  if(RA_session==='EVE')return '';
-  return sessionShift(id, RA_dateKey(), RA_session==='AM'?'am':'pm');
+  return RA_ftSessionShift(id,dow,RA_session);
 }
 
 // ── Float auto-assignment ──
 // A full-time physician's room pair is open for a session when they are absent (VAC/EL/LOA)
 // or their base schedule for that session is anything other than F2F (OFF, VV, ET, AT, IW…).
-// Evenings: full-time base profiles have no evening clinic, so all FT rooms count as open.
+// Evenings: only physicians with eve:'F2F' (base schedule or online request) hold their rooms; everyone else counts as OFF.
 // Order: MOD 361 rooms first, then MOD 362. Floats get rooms before NP/PAs.
 // Same rooms all day when possible.
 function RA_ftSessionShift(id,dow,sess){
-  if(sess==='EVE')return '';
-  return sessionShift(id, RA_dateKey(), sess==='AM'?'am':'pm');
+  const sh=sessionShift(id, RA_dateKey(), SESS_KEY[sess]);
+  return sess==='EVE' ? (sh||'OFF') : sh;
 }
 function RA_floatNeedsRoom(f,dow,sess){
-  if(sess==='EVE')return !!f.eve[dow];
   return RA_ftSessionShift(f.id,dow,sess)==='F2F';
 }
 function RA_openPairs(dow,sess,absentSet){
   const ordered=[...FT_MAIN.filter(p=>MOD361_IDS.has(p.id)),...FT_MAIN.filter(p=>!MOD361_IDS.has(p.id))];
   return ordered.filter(p=>{
-    if(absentSet.has(p.id)||sess==='EVE')return true;
+    if(absentSet.has(p.id))return true;
     const sh=RA_ftSessionShift(p.id,dow,sess);
     return sh && sh!=='F2F';
   }).map(p=>p.rooms);
@@ -1970,8 +1969,8 @@ function RA_renderModules(containerId, absentSet) {
     const isOut=absentSet.has(f.id);
     let sessRows='';
     ['AM','PM','EVE'].forEach(x=>{
-      if(x==='EVE'&&!f.eve[dow])return;
-      const code=x==='EVE'?'F2F':RA_ftSessionShift(f.id,dow,x);
+      const code=RA_ftSessionShift(f.id,dow,x);
+      if(x==='EVE'&&code!=='F2F')return;
       const rooms=RA_curAssign[x][f.id];
       let body;
       if(isOut)body=`<span class="float-code">—</span>`;
@@ -1981,7 +1980,7 @@ function RA_renderModules(containerId, absentSet) {
       sessRows+=`<div class="float-row"><span class="float-session">${x}</span>${body}</div>`;
     });
     const hr=RA_curAssign[RA_session]?.[f.id];
-    const hc=RA_session==='EVE'?(f.eve[dow]?'F2F':''):RA_ftSessionShift(f.id,dow,RA_session);
+    const hc=RA_ftSessionShift(f.id,dow,RA_session);
     const assigned=hr?`Rooms ${hr.join(' & ')} this ${RA_session}`:(hc==='F2F'?'⚠ No open room — assign manually':(hc||'Not in clinic this session'));
     floatCards+=`<div class="float-doctor">
       <div class="float-name" style="${isOut?'text-decoration:line-through;opacity:.5':''}">
@@ -2030,32 +2029,52 @@ function RA_renderModules(containerId, absentSet) {
   // Available rooms — calculated live for the selected date and session.
   // A physician's rooms are open when they are out (whole day or this half day) or not F2F
   // this session, and no float physician has been auto-assigned to them.
-  // Evenings: no full-time physician holds evening clinic, so their rooms are open unless a float has them.
+  // Evenings: shows only who has evening clinic and where; every other physician room is open.
   // Not listed: special rooms (19 admin, 20 isolation, 27 travel), MOD 150 rooms L & Q (shared with
   // Obesity Med) and the Bariatrics rooms, since they have no single physician whose schedule frees them.
-  const dk=RA_dateKey(), sk=RA_session==='AM'?'am':'pm';
+  const dk=RA_dateKey(), sk=SESS_KEY[RA_session];
   const floatTaken=new Set(Object.values(RA_curAssign[RA_session]||{}).flat().map(String));
   const openGroups=[];
   const collect=(label,list)=>{
     const chips=[];
     list.forEach(p=>{
-      const shift=RA_session==='EVE'?'':sessionShift(p.id,dk,sk);
+      const shift=sessionShift(p.id,dk,sk);
       const out=absentSet.has(p.id)||ABSENT_SESSION_CODES.has(shift);
-      const open=out||RA_session==='EVE'||(shift&&shift!=='F2F');
+      const open=out||(shift&&shift!=='F2F');
       if(!open)return;
       const rooms=p.rooms.filter(r=>!floatTaken.has(String(r))&&!OBESITY_ROOMS[r]);
       if(!rooms.length)return;
-      const why=out?'out':(RA_session==='EVE'?'no eve clinic':shift);
+      const why=out?'out':shift;
       chips.push(`<div class="avail-chip" title="${p.name} — ${why}">Rm ${rooms.join(' & ')} <span style="font-weight:400;opacity:.75">· ${p.name} ${why}</span></div>`);
     });
     if(chips.length)openGroups.push(`<div style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);margin:8px 0 4px;">${label}</div><div class="avail-chips">${chips.join('')}</div>`);
   };
-  collect('VENICE MAIN',FT_MAIN);
-  collect('MOD 150',FT_MOD150);
-  const availHTML=`<div class="avail-section">
-    <div class="avail-title">Available / Open Rooms — ${dowName} ${RA_session}</div>
-    ${openGroups.length?openGroups.join(''):'<div style="font-size:12px;color:var(--text2);">No physician rooms open this session.</div>'}
-  </div>`;
+  let availHTML;
+  if(RA_session==='EVE'){
+    const eveChips=[];
+    [...FT_MAIN,...FT_MOD150].forEach(p=>{
+      if(absentSet.has(p.id)||sessionShift(p.id,dk,'eve')!=='F2F')return;
+      eveChips.push(`<div class="avail-chip" style="background:var(--blue-lt);color:var(--blue);border-color:#bee0f5;">${p.name} · Rm ${p.rooms.join(' & ')}</div>`);
+    });
+    FLOATS.forEach(f=>{
+      if(absentSet.has(f.id)||sessionShift(f.id,dk,'eve')!=='F2F')return;
+      const r=RA_curAssign.EVE?.[f.id];
+      eveChips.push(r?`<div class="avail-chip" style="background:var(--teal-lt);color:var(--teal);border-color:#a8ddd8;">${f.name} · Rm ${r.join(' & ')}</div>`
+                     :`<div class="avail-chip" style="background:var(--red-lt);color:var(--red);border-color:#f5b8b8;">${f.name} · ⚠ no open room</div>`);
+    });
+    availHTML=`<div class="avail-section">
+      <div class="avail-title">Evening Clinic — ${dowName} 5–7pm</div>
+      ${eveChips.length?`<div class="avail-chips">${eveChips.join('')}</div><div style="font-size:12px;color:var(--text2);margin-top:8px;">All other physician rooms open.</div>`
+                       :'<div style="font-size:12px;color:var(--text2);">No evening clinic tonight. All physician rooms open.</div>'}
+    </div>`;
+  } else {
+    collect('VENICE MAIN',FT_MAIN);
+    collect('MOD 150',FT_MOD150);
+    availHTML=`<div class="avail-section">
+      <div class="avail-title">Available / Open Rooms — ${dowName} ${RA_session}</div>
+      ${openGroups.length?openGroups.join(''):'<div style="font-size:12px;color:var(--text2);">No physician rooms open this session.</div>'}
+    </div>`;
+  }
 
   wrap.innerHTML=veniceHTML+floatHTML+mod150HTML+availHTML;
 }
@@ -3134,7 +3153,7 @@ VT_renderResults = function() { REQ_dedupe(VT_providerData); return REQ_origRend
 function REQ_toProvider(r) {
   const dayCodes = {};
   Object.entries(r.sessions||{}).forEach(([d, s]) => {
-    [s.am, s.pm].forEach(v => {
+    [s.am, s.pm, s.eve].forEach(v => {
       const code = normalizeCode(v);
       if (code) { (dayCodes[d] = dayCodes[d] || new Set()).add(code); }
     });
@@ -3150,9 +3169,9 @@ function REQ_applyAll() {
   Object.values(REQ_requests).forEach(r => {
     if (r.status !== 'submitted') return;
     Object.entries(r.sessions||{}).forEach(([d, s]) => {
-      if (!s.am && !s.pm) return;
+      if (!s.am && !s.pm && !s.eve) return;
       const dk = `${r.year}-${String(r.month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-      ((SESSION_OVERRIDES[r.providerId] ||= {})[dk] = {am: s.am||'', pm: s.pm||''});
+      ((SESSION_OVERRIDES[r.providerId] ||= {})[dk] = {am: s.am||'', pm: s.pm||'', eve: s.eve||''});
     });
   });
   Object.values(REQ_requests).forEach(r => {

@@ -41,3 +41,18 @@ const WEEKLY_SHIFTS = {
   noori:    {1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'ET', eve:'F2F'}, 3:{am:'VV', pm:'OFF'},4:{am:'F2F',pm:'F2F',eve:'F2F'},5:{am:'F2F',pm:'F2F'}},  // profile Dec 2026: eve Tue+Thu
   wessel:   {1:{am:'OFF',pm:'VV'}, 2:{am:'F2F',pm:'F2F',eve:'F2F'},3:{am:'F2F',pm:'F2F'},4:{am:'ET', pm:'F2F',eve:'F2F'},5:{am:'F2F',pm:'F2F'}},  // profile Aug 2026: eve Tue+Thu
 };
+
+// Upcoming schedule changes. Each entry replaces that physician's whole regular week
+// starting on `from` (YYYY-MM-DD). Dates before `from` keep using WEEKLY_SHIFTS above.
+// When a change has taken effect for good, you can copy its week into WEEKLY_SHIFTS and delete the entry.
+const SCHEDULE_CHANGES = [
+  {id:'nguyen', from:'2027-02-01', note:'profile Feb 2027',
+   week:{1:{am:'F2F',pm:'F2F'},2:{am:'F2F',pm:'F2F'},3:{am:'F2F',pm:'F2F'},4:{am:'VV', pm:'ET'}, 5:{am:'OFF',pm:'OFF'}}},
+];
+
+// The regular week that applies to a physician on a given date (dk = 'YYYY-MM-DD').
+function weeklyFor(id, dk){
+  let week = WEEKLY_SHIFTS[id], best = '';
+  SCHEDULE_CHANGES.forEach(c => { if (c.id === id && c.from <= dk && c.from >= best) { week = c.week; best = c.from; } });
+  return week;
+}

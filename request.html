@@ -88,9 +88,15 @@ const CODES = ['VAC','EL','LOA','SL','VV','ROUNDING','OUT'];
 const ALL_CODES = ['F2F','VV','ET','AT','IW','OB','OFF','VAC','EL','LOA','SL','ROUNDING','OUT'];
 const ABSENCE = new Set(['VAC','EL','LOA','SL','OUT']);
 // Regular schedule for a weekday session, from shared-data.js ('' if none, e.g. NP/PAs)
-function baseCode(dow, s){ return ((typeof WEEKLY_SHIFTS!=='undefined' && WEEKLY_SHIFTS[PID]?.[dow]) || {})[s] || ''; }
+// Regular schedule for day d of the selected month (date-aware, so upcoming profile changes apply)
+function baseCode(d, s){
+  if (typeof WEEKLY_SHIFTS==='undefined') return '';
+  const {y,m} = sel, dk = `${y}-${pad(m)}-${pad(d)}`, dow = new Date(y,m-1,d).getDay();
+  const week = typeof weeklyFor==='function' ? weeklyFor(PID, dk) : WEEKLY_SHIFTS[PID];
+  return (week?.[dow] || {})[s] || '';
+}
 // Show an EVE row only for physicians who do evening clinic
-function hasEve(){ return typeof WEEKLY_SHIFTS!=='undefined' && Object.values(WEEKLY_SHIFTS[PID]||{}).some(x=>x && x.eve); }
+function hasEve(){ return typeof WEEKLY_SHIFTS!=='undefined' && [WEEKLY_SHIFTS[PID], ...(typeof SCHEDULE_CHANGES!=='undefined'?SCHEDULE_CHANGES.filter(c=>c.id===PID).map(c=>c.week):[])].some(w=>Object.values(w||{}).some(x=>x && x.eve)); }
 function isClosed(y,m,d){ return typeof CLINIC_HOLIDAYS!=='undefined' && CLINIC_HOLIDAYS.has(`${y}-${pad(m)}-${pad(d)}`); }
 const CODE_LABELS = {VAC:'VAC – vacation',EL:'EL – education leave',LOA:'LOA – leave of absence',
   SL:'SL – sick leave',VV:'VV – virtual visit',ROUNDING:'Rounding',OUT:'Out (other)'};
@@ -208,7 +214,7 @@ function render(){
     if(isClosed(y,m,d)){ cells += `<div class="day closed"><div class="n">${d}</div><div class="c">Clinic closed</div></div>`; continue; }
     const s = reqData.sessions[d] || {};
     const sessHtml = key => {
-      const base = baseCode(dow, key), chosen = s[key] || '', shown = chosen || base;
+      const base = baseCode(d, key), chosen = s[key] || '', shown = chosen || base;
       const opts = (base ? '' : `<option value="">—</option>`) +
         ALL_CODES.map(c=>`<option value="${c}"${shown===c?' selected':''}>${c==='OB'?'OB – Obesity Med (MOD 150)':c}${c===base?' (regular)':''}</option>`).join('');
       return `<div class="sess"><span>${key.toUpperCase()}</span><select data-d="${d}" data-s="${key}" data-base="${base}"${chosen?' class="chg"':''}>${opts}</select></div>`;
@@ -276,8 +282,8 @@ function applyRange(){
   for(let d=Math.min(a,b); d<=Math.max(a,b); d++){
     const dow = new Date(y,m-1,d).getDay();
     if(dow===0||dow===6||isClosed(y,m,d)) continue;
-    const eveBase = baseCode(dow,'eve');
-    reqData.sessions[d] = {am: code===baseCode(dow,'am')?'':code, pm: code===baseCode(dow,'pm')?'':code,
+    const eveBase = baseCode(d,'eve');
+    reqData.sessions[d] = {am: code===baseCode(d,'am')?'':code, pm: code===baseCode(d,'pm')?'':code,
       // evening follows the range only on the physician's regular evening days
       eve: (hasEve() && eveBase && code!==eveBase) ? code : ''};
   }

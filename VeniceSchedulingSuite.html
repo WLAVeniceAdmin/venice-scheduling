@@ -979,7 +979,7 @@ function sessionShift(id, dk, sess){
   const o = SESSION_OVERRIDES[id]?.[dk]?.[sess];
   if (o) return o;
   const dow = new Date(dk+'T12:00:00').getDay();
-  return WEEKLY_SHIFTS[id]?.[dow]?.[sess] || '';
+  return weeklyFor(id, dk)?.[dow]?.[sess] || '';
 }
 const SESS_KEY = {AM:'am', PM:'pm', EVE:'eve'};
 function sessionOverridden(id, dk, sess){ return !!SESSION_OVERRIDES[id]?.[dk]?.[sess]; }
@@ -1230,6 +1230,15 @@ function VT_renderBaseProfiles() {
     html+='</tr>';
   });
   html+='</tbody></table>';
+  if(typeof SCHEDULE_CHANGES!=='undefined' && SCHEDULE_CHANGES.length){
+    const dn=['','Mon','Tue','Wed','Thu','Fri'];
+    html+=`<div style="margin-top:10px;font-size:11px;font-family:'DM Mono',monospace;color:var(--text2);">UPCOMING CHANGES</div>`;
+    SCHEDULE_CHANGES.slice().sort((a,b)=>a.from.localeCompare(b.from)).forEach(c=>{
+      const when=new Date(c.from+'T12:00:00').toLocaleDateString('default',{month:'short',day:'numeric',year:'numeric'});
+      const wk=[1,2,3,4,5].map(d=>{const w=c.week[d]||{};return `${dn[d]} ${w.am||'—'}/${w.pm||'—'}${w.eve?' +EVE':''}`;}).join(' · ');
+      html+=`<div style="font-size:11px;font-family:'DM Mono',monospace;padding:4px 0;"><b>${idToName[c.id]||c.id}</b> from ${when}: ${wk}</div>`;
+    });
+  }
   cont.innerHTML=html;
 }
 

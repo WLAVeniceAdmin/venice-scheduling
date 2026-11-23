@@ -657,8 +657,9 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
     </div>
     <div id="PD_status" style="margin-top:14px;font-size:12px;"></div>
     <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-      <button class="btn-primary" id="PD_exportBtn" disabled title="Waiting for an example prelim file so the export matches it exactly">⬇ Export in prelim format</button>
-      <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;">Export turns on once every MD/DO has submitted (format pending example file)</span>
+      <button class="btn-primary" id="PD_exportBtn" disabled onclick="PD_export(false)">⬇ Export in prelim format</button>
+      <button class="btn-secondary" id="PD_previewBtn" onclick="PD_export(true)">Download preview</button>
+      <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;" id="PD_exportNote">Export turns on once every MD/DO has submitted. The preview uses regular schedules for anyone missing.</span>
     </div>
   </div>
   <div class="stats-row" id="PD_stats" style="grid-template-columns:repeat(4,1fr);"></div>
@@ -3450,6 +3451,95 @@ function PD_render(){
     <div class="stat-card ok"><div class="stat-label">Open AM half days</div><div class="stat-value ok">${totAM}</div></div>
     <div class="stat-card ok"><div class="stat-label">Open PM half days</div><div class="stat-value ok">${totPM}</div></div>
     <div class="stat-card ${complete?'ok':'warn'}"><div class="stat-label">Requests in</div><div class="stat-value ${complete?'ok':'warn'}">${done}/${mds.length}</div></div>`;
+  document.getElementById('PD_exportBtn').disabled = !complete;
+  document.getElementById('PD_previewBtn').style.display = complete ? 'none' : '';
+  document.getElementById('PD_exportNote').textContent = complete
+    ? 'All requests are in. The export is final.'
+    : 'Export turns on once every MD/DO has submitted. The preview uses regular schedules for anyone missing.';
+}
+
+// ── Export in the same layout as the KP GRID_BY_STAFF prelim file ──
+// Matches the prelim: one sheet "sheet1"; header row (Staff Type, Name, every day of the month,
+// "Mon / " before day 1 and each Sunday); columns A–B width 30, day columns width 20; header
+// bold white Calibri 11 on #4692C5; rows 47.1 high; thin left/right borders, top border on the
+// first row of each block, bottom border on the last row; session cells white fill, black text,
+// top-aligned with wrap, "<code>\n<HH:MM - HH:MM>".
+// Rows: one block per room pair with any opening that month (AM row + PM row), FM before IM.
+async function PD_export(preview){
+  if (typeof ExcelJS === 'undefined') { alert('Excel library still loading — please try again in a moment.'); return; }
+  const m=PD_month, y=PD_year, numDays=new Date(y,m,0).getDate();
+  const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m-1];
+  const DN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  // Collect openings per room pair
+  const pairs=new Map();   // key -> {rooms, id, mod, am:Set(day), pm:Set(day)}
+  for(let d=1; d<=numDays; d++){
+    const open=PD_openForDate(dateKey(new Date(y,m-1,d)));
+    if(!open) continue;
+    [['AM','am'],['PM','pm']].forEach(([S,k])=>open[S].forEach(o=>{
+      const key=o.rooms.join('&');
+      if(!pairs.has(key)) pairs.set(key,{rooms:o.rooms,id:o.id,mod:o.mod,am:new Set(),pm:new Set()});
+      pairs.get(key)[k].add(d);
+    }));
+  }
+  const order=[...FT_MOD150.map(p=>p.id), ...FT_MAIN.map(p=>p.id)];
+  const blocks=[...pairs.values()].sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id) || String(a.rooms[0]).localeCompare(String(b.rooms[0]),undefined,{numeric:true}));
+  const prelimName=id=>{
+    const p=[...FT_ALL].find(x=>x.id===id); if(!p) return id.toUpperCase();
+    const [last,first]=(p.fullName||p.name).split(',').map(x=>x.trim());
+    return (first?`${first[0]}. `:'')+last.toUpperCase();
+  };
+
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet('sheet1');
+  const lastCol=2+numDays;
+  ws.columns=[{width:30},{width:30},...Array.from({length:numDays},()=>({width:20}))];
+  const thin={style:'thin'};
+  const font={name:'Calibri',size:11};
+  ws.getColumn(1).font={...font,bold:true}; ws.getColumn(2).font={...font,bold:true};   // prelim's A–B column style
+
+  // Header
+  const hdr=['Staff Type','Name'];
+  for(let d=1; d<=numDays; d++){ const dow=new Date(y,m-1,d).getDay(); hdr.push(`${d===1||dow===0?MON+' / ':''}${DN[dow]} ${d}`); }
+  const h=ws.getRow(1);
+  hdr.forEach((v,i)=>{ const c=h.getCell(i+1); c.value=v; c.font={...font,bold:true,color:{argb:'FFFFFFFF'}};
+    c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF4692C5'}}; c.border={left:thin,right:thin}; c.alignment={horizontal:'left'}; });
+
+  // Data rows
+  let rn=1;
+  const totalRows=blocks.length*2;
+  let lastMod=null;
+  blocks.forEach(b=>{
+    const fm=b.mod==='MOD 150', dept=fm?'FM':'IM';
+    [['am','A','8a-12p','08:00 - 12:00'],['pm','P','1p-5p','13:00 - 17:00']].forEach(([k,pre,short,time],i)=>{
+      rn++;
+      const row=ws.getRow(rn); row.height=47.1;
+      const first=i===0, last=rn===totalRows+1;
+      const border={left:thin,right:thin, ...(first?{top:thin}:{}), ...(last?{bottom:thin}:{})};
+      const a=row.getCell(1), n=row.getCell(2);
+      a.value = (first && b.mod!==lastMod) ? `Per Diem - VEN ${dept} Open Rooms` : '';
+      n.value = first ? `RM ${b.rooms.join(' & ')} (${prelimName(b.id)})` : '';
+      [a,n].forEach(c=>{ c.font={...font,bold:true}; c.border=border; });
+      for(let d=1; d<=numDays; d++){
+        const c=row.getCell(2+d);
+        c.border=border;
+        if(b[k].has(d)){
+          c.value=`${pre} OPEN ${dept} VEN ${short}\n${time}`;
+          c.font={...font,color:{argb:'FF000000'}};
+          c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFFFF'}};
+          c.alignment={vertical:'top',wrapText:true};
+        } else { c.value=''; c.font=font; }
+      }
+    });
+    lastMod=b.mod;
+  });
+  if(!blocks.length){ ws.getRow(2).getCell(1).value='No open rooms this month'; }
+
+  const buf=await wb.xlsx.writeBuffer();
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  a.download=`VEN _ WLA-Venice and West LA_${MON}_${y}_PER_DIEM_OPEN_ROOMS${preview?'_PREVIEW':''}.xlsx`;
+  a.click();
 }
 REQ_init();
 </script>

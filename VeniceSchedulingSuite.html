@@ -380,6 +380,7 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
   <button class="tab-bar-btn" onclick="switchTab('prelim')">🔍 Prelim Check</button>
   <button class="tab-bar-btn" onclick="switchTab('heatmap')">🌡️ Room Heatmap</button>
   <button class="tab-bar-btn" onclick="switchTab('cal')">📆 Calendar</button>
+  <button class="tab-bar-btn" onclick="switchTab('perdiem')">🩺 Per Diem</button>
 </nav>
 
 <!-- ═══════════════════════════════════════════════════════════
@@ -634,6 +635,36 @@ input[type=date]:focus,select:focus{outline:none;border-color:var(--blue);}
     <div class="vt-rule-item"><span class="rule-badge hw">MOD 150</span><span>Bazargan-Lari · Ozaki · Pham · Moghtader</span></div>
   </div>
   <div id="HM_container"></div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TAB — PER DIEM OPPORTUNITIES
+═══════════════════════════════════════════════════════════ -->
+<div id="page-perdiem" class="page">
+<div class="main">
+  <div class="vt-rules-banner">
+    <div class="vt-rule-item"><span class="rule-badge ok">Open exam rooms by half day</span><span>physician out or not F2F · not taken by a float</span></div>
+    <div class="vt-rule-item"><span class="rule-badge code">Not counted: Rm 19 · 20 · 27 · L & Q · Bariatrics · evenings</span></div>
+  </div>
+  <div class="upload-section">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div>
+        <div class="section-title" id="PD_title">Per Diem Opportunities</div>
+        <div class="section-sub" style="margin-bottom:0" id="PD_sub"></div>
+      </div>
+      <div id="PD_monthChips" style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;"></div>
+    </div>
+    <div id="PD_status" style="margin-top:14px;font-size:12px;"></div>
+    <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <button class="btn-primary" id="PD_exportBtn" disabled title="Waiting for an example prelim file so the export matches it exactly">⬇ Export in prelim format</button>
+      <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;">Export turns on once every MD/DO has submitted (format pending example file)</span>
+    </div>
+  </div>
+  <div class="stats-row" id="PD_stats" style="grid-template-columns:repeat(4,1fr);"></div>
+  <div class="calendar-card">
+    <div class="cal-table-wrap"><table class="cal-table" id="PD_table"></table></div>
+  </div>
 </div>
 </div>
 
@@ -983,7 +1014,24 @@ function sessionShift(id, dk, sess){
 }
 const SESS_KEY = {AM:'am', PM:'pm', EVE:'eve'};
 function sessionOverridden(id, dk, sess){ return !!SESSION_OVERRIDES[id]?.[dk]?.[sess]; }
-function RA_dateKey(){ return document.getElementById('RA_dateInput')?.value || dateKey(new Date()); }
+let RA_dateOverride = null;   // set temporarily to evaluate rooms for another date (Per Diem tab)
+function RA_dateKey(){ return RA_dateOverride || document.getElementById('RA_dateInput')?.value || dateKey(new Date()); }
+
+// Open physician rooms for one date + session ('AM' | 'PM').
+// absentSet: whole-day absences; assign: result of RA_assignFloats for that date.
+function openRoomList(dk, S, absentSet, assign){
+  const sk = SESS_KEY[S];
+  const taken = new Set(Object.values(assign[S]||{}).flat().map(String));
+  const out = [];
+  [...FT_MAIN.map(p=>({...p,mod:'VENICE MAIN'})), ...FT_MOD150.map(p=>({...p,mod:'MOD 150'}))].forEach(p=>{
+    const sh = sessionShift(p.id, dk, sk);
+    const isOut = absentSet.has(p.id) || ABSENT_SESSION_CODES.has(sh);
+    if(!(isOut || (sh && sh!=='F2F'))) return;
+    const rooms = p.rooms.filter(r=>!taken.has(String(r)) && !OBESITY_ROOMS[r]);
+    if(rooms.length) out.push({rooms, id:p.id, name:p.name, mod:p.mod, why: isOut ? 'out' : (sh==='OB' ? 'in MOD 150' : sh)});
+  });
+  return out;
+}
 
 const ALL_NPS = [
   {id:'jimenez',  name:'Jimenez, I',  capTracked:true},
@@ -1054,11 +1102,12 @@ function isHWPhysician(name) {
 function switchTab(tab) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab-bar-btn').forEach((b,i)=>
-    b.classList.toggle('active',['vt','ra','np','prelim','heatmap','cal'][i]===tab));
+    b.classList.toggle('active',['vt','ra','np','prelim','heatmap','cal','perdiem'][i]===tab));
   document.getElementById(`page-${tab}`).classList.add('active');
   if(tab==='ra') { RA_syncFromVT(); RA_render(); }
   if(tab==='heatmap') HM_render();
   if(tab==='cal') CAL_render();
+  if(tab==='perdiem') PD_render();
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -2050,20 +2099,10 @@ function RA_renderModules(containerId, absentSet) {
   // Not listed: special rooms (19 admin, 20 isolation, 27 travel), MOD 150 rooms L & Q (shared with
   // Obesity Med) and the Bariatrics rooms, since they have no single physician whose schedule frees them.
   const dk=RA_dateKey(), sk=SESS_KEY[RA_session];
-  const floatTaken=new Set(Object.values(RA_curAssign[RA_session]||{}).flat().map(String));
   const openGroups=[];
-  const collect=(label,list)=>{
-    const chips=[];
-    list.forEach(p=>{
-      const shift=sessionShift(p.id,dk,sk);
-      const out=absentSet.has(p.id)||ABSENT_SESSION_CODES.has(shift);
-      const open=out||(shift&&shift!=='F2F');
-      if(!open)return;
-      const rooms=p.rooms.filter(r=>!floatTaken.has(String(r))&&!OBESITY_ROOMS[r]);
-      if(!rooms.length)return;
-      const why=out?'out':(shift==='OB'?'in MOD 150':shift);
-      chips.push(`<div class="avail-chip" title="${p.name} — ${why}">Rm ${rooms.join(' & ')} <span style="font-weight:400;opacity:.75">· ${p.name} ${why}</span></div>`);
-    });
+  const openList=RA_session==='EVE'?[]:openRoomList(dk,RA_session,absentSet,RA_curAssign);
+  const collect=(label)=>{
+    const chips=openList.filter(o=>o.mod===label).map(o=>`<div class="avail-chip" title="${o.name} — ${o.why}">Rm ${o.rooms.join(' & ')} <span style="font-weight:400;opacity:.75">· ${o.name} ${o.why}</span></div>`);
     if(chips.length)openGroups.push(`<div style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);margin:8px 0 4px;">${label}</div><div class="avail-chips">${chips.join('')}</div>`);
   };
   let availHTML;
@@ -2085,8 +2124,8 @@ function RA_renderModules(containerId, absentSet) {
                        :'<div style="font-size:12px;color:var(--text2);">No evening clinic tonight. All physician rooms open.</div>'}
     </div>`;
   } else {
-    collect('VENICE MAIN',FT_MAIN);
-    collect('MOD 150',FT_MOD150);
+    collect('VENICE MAIN');
+    collect('MOD 150');
     availHTML=`<div class="avail-section">
       <div class="avail-title">Available / Open Rooms — ${dowName} ${RA_session}</div>
       ${openGroups.length?openGroups.join(''):'<div style="font-size:12px;color:var(--text2);">No physician rooms open this session.</div>'}
@@ -3342,7 +3381,75 @@ async function REQ_init() {
     snap.forEach(d => { REQ_requests[d.id] = d.data(); });
     REQ_applyAll();
     REQ_renderPanel();
+    if (document.getElementById('page-perdiem')?.classList.contains('active')) PD_render();
   }, err => { console.error('venice_requests listener:', err); REQ_warn('Could not read online requests: ' + (err.code || err.message)); });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PER DIEM OPPORTUNITIES (PD_)
+// Open exam rooms by half day for a month, using the same rules as Room Assignment.
+// ══════════════════════════════════════════════════════════════════════════════
+let PD_month = null, PD_year = null;
+function PD_setMonth(m,y){ PD_month=m; PD_year=y; PD_render(); }
+
+// All open rooms for a date: {AM:[...], PM:[...]} or null on weekends/holidays
+function PD_openForDate(dk){
+  const dow = new Date(dk+'T12:00:00').getDay();
+  if(dow===0 || dow===6 || CLINIC_HOLIDAYS.has(dk)) return null;
+  RA_dateOverride = dk;
+  try{
+    const absent = VT_getAbsencesForDate(dk);
+    const assign = RA_assignFloats(dow, absent);
+    return {AM: openRoomList(dk,'AM',absent,assign), PM: openRoomList(dk,'PM',absent,assign)};
+  } finally { RA_dateOverride = null; }
+}
+
+function PD_render(){
+  if(!document.getElementById('page-perdiem')) return;
+  const now = new Date();
+  if(!PD_month){ const n=new Date(now.getFullYear(), now.getMonth()+1, 1); PD_month=n.getMonth()+1; PD_year=n.getFullYear(); }
+  const m=PD_month, y=PD_year, key=`${y}-${String(m).padStart(2,'0')}`;
+  const monthName=new Date(y,m-1,1).toLocaleString('default',{month:'long',year:'numeric'});
+
+  document.getElementById('PD_monthChips').innerHTML=[0,1,2,3].map(i=>{
+    const d=new Date(now.getFullYear(),now.getMonth()+i,1), mm=d.getMonth()+1, yy=d.getFullYear(), act=mm===m&&yy===y;
+    return `<button onclick="PD_setMonth(${mm},${yy})" style="padding:4px 12px;border-radius:20px;border:1px solid ${act?'var(--navy)':'var(--grey2)'};background:${act?'var(--navy)':'white'};color:${act?'white':'var(--text2)'};font-size:11px;cursor:pointer;font-family:'DM Mono',monospace;">${d.toLocaleString('default',{month:'short',year:'numeric'})}</button>`;
+  }).join('');
+  document.getElementById('PD_title').textContent=`Per Diem Opportunities — ${monthName}`;
+  document.getElementById('PD_sub').textContent='OPEN PHYSICIAN EXAM ROOMS BY HALF DAY';
+
+  // Has every MD/DO submitted for this month?
+  const mds=REQ_ROSTER.filter(p=>p.role==='md');
+  const missing=mds.filter(p=>REQ_requests[`${p.id}_${key}`]?.status!=='submitted');
+  const done=mds.length-missing.length, complete=missing.length===0;
+  document.getElementById('PD_status').innerHTML = complete
+    ? `<span style="color:var(--teal);font-weight:600">✓ All ${mds.length} MD/DO requests submitted for ${monthName}. This list is final.</span>`
+    : `<span style="color:var(--amber);font-weight:600">${done} of ${mds.length} MD/DO requests submitted.</span>
+       <span style="color:var(--text2)"> List below is a preview using regular schedules for anyone missing.</span>
+       <div style="margin-top:6px;color:var(--text2);font-family:'DM Mono',monospace;font-size:11px;">Waiting on: ${missing.map(p=>p.name).join(', ')}</div>`;
+
+  const numDays=new Date(y,m,0).getDate(), dn=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  let rows='', totAM=0, totPM=0, days=0;
+  const chip=o=>`<span class="avail-chip" style="display:inline-block;margin:2px;" title="${o.name} — ${o.why}">Rm ${o.rooms.join(' & ')} <span style="font-weight:400;opacity:.75">· ${o.name} ${o.why}</span></span>`;
+  for(let d=1; d<=numDays; d++){
+    const dk=dateKey(new Date(y,m-1,d)), dow=new Date(y,m-1,d).getDay();
+    if(dow===0||dow===6) continue;
+    const open=PD_openForDate(dk);
+    const date=`${String(m).padStart(2,'0')}/${String(d).padStart(2,'0')}`;
+    if(!open){ rows+=`<tr class="weekend"><td class="date-col">${date}</td><td class="dow-col">${dn[dow]}</td><td colspan="4" style="text-align:left;color:var(--grey3);font-style:italic;">Clinic closed</td></tr>`; continue; }
+    days++; totAM+=open.AM.length; totPM+=open.PM.length;
+    rows+=`<tr><td class="date-col">${date}</td><td class="dow-col">${dn[dow]}</td>
+      <td style="text-align:center;font-weight:700;color:var(--teal)">${open.AM.length||''}</td>
+      <td style="text-align:left">${open.AM.map(chip).join('')||'<span style="color:var(--grey3)">—</span>'}</td>
+      <td style="text-align:center;font-weight:700;color:var(--teal)">${open.PM.length||''}</td>
+      <td style="text-align:left">${open.PM.map(chip).join('')||'<span style="color:var(--grey3)">—</span>'}</td></tr>`;
+  }
+  document.getElementById('PD_table').innerHTML=`<thead><tr><th class="date-col">Date</th><th>Day</th><th>#</th><th style="text-align:left">AM open rooms</th><th>#</th><th style="text-align:left">PM open rooms</th></tr></thead><tbody>${rows}</tbody>`;
+  document.getElementById('PD_stats').innerHTML=`
+    <div class="stat-card info"><div class="stat-label">Clinic days</div><div class="stat-value">${days}</div></div>
+    <div class="stat-card ok"><div class="stat-label">Open AM half days</div><div class="stat-value ok">${totAM}</div></div>
+    <div class="stat-card ok"><div class="stat-label">Open PM half days</div><div class="stat-value ok">${totPM}</div></div>
+    <div class="stat-card ${complete?'ok':'warn'}"><div class="stat-label">Requests in</div><div class="stat-value ${complete?'ok':'warn'}">${done}/${mds.length}</div></div>`;
 }
 REQ_init();
 </script>
